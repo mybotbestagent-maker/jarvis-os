@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>J.A.R.V.I.S — Living Hologram</title>
+<style>
+  :root {
+    --bg: #03070e;
+    --fg: #e8fbff;
+    --dim: #5a8a98;
+    --line: #0e2030;
+    --cyan: #00d4ff;
+    --cyan-bright: #80f0ff;
+    --cyan-glow: rgba(0,212,255,.55);
+    --cyan-soft: rgba(0,212,255,.10);
+    --orange: #ff8c2a;
+    --orange-soft: #ffae5c;
+    --orange-glow: rgba(255,140,42,.7);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body {
+    font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  /* deep workshop backdrop */
+  .stage-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 70% 80% at 50% 55%, rgba(0,80,140,.18) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 60% at 50% 100%, rgba(120,60,30,.10) 0%, transparent 70%),
+      linear-gradient(180deg, #02060c 0%, #050a18 50%, #02060c 100%);
+  }
+
+  .scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 80;
+    background: repeating-linear-gradient(to bottom, transparent 0, transparent 3px, rgba(0,212,255,.02) 4px, transparent 5px);
+    mix-blend-mode: screen;
+  }
+
+  /* main canvas — fills viewport, JARVIS lives here */
+  canvas#scene {
+    position: fixed; inset: 0; z-index: 1;
+    width: 100%; height: 100%;
+  }
+
+  /* JARVIS logo (DOM overlay so we get crisp text) */
+  .jarvis-label {
+    position: fixed; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    pointer-events: none;
+    text-align: center;
+  }
+  .jarvis-label .glyph {
+    font-size: 24px; font-weight: 800; letter-spacing: 8px;
+    color: var(--cyan-bright);
+    text-shadow:
+      0 0 12px var(--cyan-glow),
+      0 0 28px rgba(0,212,255,.4),
+      0 0 4px #fff;
+    line-height: 1;
+  }
+  .jarvis-label .glyph small {
+    display: block;
+    font-size: 8px; letter-spacing: 4px; margin-top: 6px;
+    color: var(--cyan);
+    text-shadow: 0 0 6px var(--cyan-glow);
+    opacity: .8;
+  }
+
+  /* state label above logo */
+  .state-badge {
+    position: fixed; left: 50%; top: calc(50% - 90px);
+    transform: translateX(-50%);
+    z-index: 5;
+    font-size: 9px; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--cyan);
+    pointer-events: none;
+    transition: color .3s ease;
+  }
+  .state-badge[data-state="listening"] { color: var(--cyan-bright); animation: pulse-state 1s infinite; }
+  .state-badge[data-state="thinking"]  { color: var(--orange-soft); animation: pulse-state .7s infinite; }
+  .state-badge[data-state="speaking"]  { color: var(--orange); animation: pulse-state .5s infinite; }
+  @keyframes pulse-state { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+
+  /* HUD top */
+  .hud-top {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 22px; z-index: 60;
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    pointer-events: none;
+  }
+  .hud-top .brand, .hud-top .api-btn { pointer-events: auto; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand .ring {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 1.5px solid var(--cyan);
+    position: relative; box-shadow: 0 0 8px var(--cyan-glow);
+  }
+  .brand .ring::after {
+    content: ""; position: absolute; inset: 2.5px;
+    background: var(--cyan); border-radius: 50%;
+    box-shadow: 0 0 6px var(--cyan);
+  }
+  .brand .name {
+    font-weight: 700; letter-spacing: 4px;
+    text-shadow: 0 0 8px var(--cyan-glow);
+  }
+  .api-btn {
+    border: 1px solid var(--cyan);
+    border-radius: 999px; padding: 6px 14px;
+    color: var(--fg); background: transparent;
+    font-family: inherit; font-size: 10px; letter-spacing: 3px;
+    cursor: pointer; text-transform: uppercase;
+  }
+  .api-btn:hover { background: var(--cyan-soft); box-shadow: 0 0 12px var(--cyan-glow); }
+
+  /* bottom HUD */
+  .hud-bottom {
+    position: fixed; bottom: 16px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; z-index: 60;
+    font-size: 9px; letter-spacing: 2.5px; text-transform: uppercase;
+    color: var(--dim);
+    pointer-events: none;
+  }
+  .hud-bottom .ok { color: var(--cyan-bright); }
+  .hud-bottom .blink { animation: blink 1.4s infinite; }
+  @keyframes blink { 0%,49% { opacity: 1; } 50%,100% { opacity: .2; } }
+
+  /* satellites — 4 corner mini HUDs (planets grouped) */
+  .satellite {
+    position: fixed;
+    width: 130px; height: 130px;
+    z-index: 5;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .sat-1 { left: 7%;  top: 22%; }
+  .sat-2 { right: 7%; top: 22%; }
+  .sat-3 { left: 7%;  bottom: 22%; }
+  .sat-4 { right: 7%; bottom: 22%; }
+
+  .satellite .ring-outer,
+  .satellite .ring-inner {
+    position: absolute; inset: 0;
+    border: 1px solid var(--cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--cyan-glow), inset 0 0 10px rgba(0,212,255,.15);
+    animation: sat-spin 22s linear infinite;
+  }
+  .satellite .ring-inner {
+    inset: 18px;
+    border-color: var(--orange);
+    border-style: dashed;
+    box-shadow: 0 0 10px var(--orange-glow);
+    animation: sat-spin 14s linear infinite reverse;
+  }
+  .satellite .core {
+    position: absolute; inset: 38px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--cyan-bright) 0%, var(--cyan) 30%, transparent 75%);
+    box-shadow: 0 0 16px var(--cyan-glow);
+    animation: sat-pulse 2.6s ease-in-out infinite;
+  }
+  .satellite .label {
+    position: absolute; left: 50%; bottom: -22px;
+    transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--fg);
+    text-shadow: 0 0 6px var(--cyan-glow);
+    white-space: nowrap;
+  }
+  .satellite .ic {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 22px;
+    z-index: 2;
+  }
+  .satellite:hover .ring-outer { border-color: var(--cyan-bright); box-shadow: 0 0 20px var(--cyan-glow); }
+  .satellite:hover .core { transform: scale(1.15); }
+  @keyframes sat-spin { to { transform: rotate(360deg); } }
+  @keyframes sat-pulse { 0%,100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.08); opacity: 1; } }
+
+  /* voice controls (bottom center) */
+  .voice-dock {
+    position: fixed; left: 50%; bottom: 60px;
+    transform: translateX(-50%);
+    z-index: 7;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .mic-btn {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,212,255,.25), rgba(0,212,255,.05));
+    border: 2px solid var(--cyan);
+    color: var(--cyan-bright);
+    font-size: 26px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 28px var(--cyan-glow);
+    transition: all .2s ease;
+    font-family: inherit;
+  }
+  .mic-btn:hover { transform: scale(1.05); box-shadow: 0 0 40px var(--cyan-glow); }
+  .mic-btn.listening {
+    background: radial-gradient(circle, rgba(255,140,42,.4), rgba(255,140,42,.08));
+    border-color: var(--orange);
+    color: var(--orange-soft);
+    box-shadow: 0 0 38px var(--orange-glow);
+    animation: mic-pulse .9s infinite;
+  }
+  @keyframes mic-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  .sitrep-btn, .text-btn {
+    height: 44px;
+    padding: 0 22px;
+    border-radius: 999px;
+    border: 1.5px solid var(--cyan);
+    background: rgba(0,8,12,.7);
+    color: var(--fg);
+    font-family: inherit; font-size: 11px; letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 0 16px rgba(0,212,255,.2);
+    transition: all .2s ease;
+  }
+  .sitrep-btn { border-color: var(--orange); color: var(--orange-soft); box-shadow: 0 0 18px var(--orange-glow); }
+  .sitrep-btn:hover { background: rgba(255,140,42,.1); box-shadow: 0 0 28px var(--orange-glow); }
+  .text-btn:hover { background: var(--cyan-soft); box-shadow: 0 0 24px var(--cyan-glow); }
+
+  /* live transcript bubble */
+  .transcript {
+    position: fixed; left: 50%; bottom: 150px;
+    transform: translateX(-50%);
+    z-index: 6;
+    max-width: 80%;
+    padding: 10px 18px;
+    background: rgba(0,8,12,.8);
+    border: 1px solid var(--cyan);
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--fg);
+    text-align: center;
+    text-shadow: 0 0 6px var(--cyan-glow);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 20px rgba(0,212,255,.2);
+    display: none;
+  }
+  .transcript.on { display: block; }
+  .transcript.user-text { border-color: var(--cyan); }
+  .transcript.jarvis-text { border-color: var(--orange); color: var(--orange-soft); text-shadow: 0 0 8px var(--orange-glow); box-shadow: 0 0 20px var(--orange-glow); }
+
+  /* chat panel (text mode) */
+  .panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(440px, 100vw);
+    background: rgba(2,8,12,.96);
+    backdrop-filter: blur(12px);
+    border-left: 1px solid var(--cyan);
+    transform: translateX(100%);
+    transition: transform .4s cubic-bezier(.2,.85,.25,1);
+    display: flex; flex-direction: column;
+    z-index: 200;
+    box-shadow: -20px 0 80px rgba(0,0,0,.7);
+  }
+  .panel.open { transform: translateX(0); }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+  }
+  .panel-head .led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cyan-bright);
+    box-shadow: 0 0 6px var(--cyan-bright);
+    animation: blink 1.4s infinite;
+  }
+  .panel-head .name { flex: 1; }
+  .panel-head .name b { color: var(--cyan-bright); }
+  .panel-head .close {
+    background: none; border: none; color: var(--dim); font-size: 18px;
+    cursor: pointer; font-family: inherit;
+  }
+  .panel-head .close:hover { color: var(--fg); }
+  .channel-info {
+    padding: 10px 18px;
+    font-size: 10px; letter-spacing: 2px;
+    color: var(--dim); text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+  }
+  .msgs {
+    flex: 1; overflow-y: auto;
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .msg { font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user {
+    align-self: flex-end; max-width: 88%;
+    border: 1px solid var(--line);
+    background: rgba(0,212,255,.06);
+    padding: 9px 13px; border-radius: 4px 4px 0 4px;
+  }
+  .msg.bot {
+    align-self: flex-start; max-width: 92%;
+    border-left: 2px solid var(--cyan-bright);
+    padding-left: 12px;
+  }
+  .msg.bot::before { content: "JARVIS >_ "; color: var(--cyan-bright); font-weight: 700; }
+  .msg.sys {
+    align-self: center; color: var(--dim); font-size: 10px;
+    letter-spacing: 2px; text-transform: uppercase;
+    text-align: center; padding: 8px 14px;
+    border: 1px dashed var(--line); border-radius: 4px;
+  }
+  .composer { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); }
+  .composer textarea {
+    flex: 1; resize: none; min-height: 42px; max-height: 140px;
+    background: rgba(0,212,255,.03); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 10px 12px;
+    font-family: inherit; font-size: 13px; outline: none;
+    caret-color: var(--cyan-bright);
+  }
+  .composer textarea:focus { border-color: var(--cyan-bright); }
+  .composer button {
+    background: transparent; color: var(--cyan-bright);
+    border: 1px solid var(--cyan-bright);
+    padding: 0 18px; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 16px;
+  }
+  .composer button:hover { background: rgba(0,212,255,.1); }
+
+  /* modal */
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.88); backdrop-filter: blur(8px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 300; padding: 20px;
+  }
+  .modal.open { display: flex; }
+  .modal .card {
+    background: rgba(0,12,18,.97);
+    border: 1px solid var(--cyan-bright);
+    box-shadow: 0 0 50px var(--cyan-glow);
+    border-radius: 6px; padding: 28px;
+    max-width: 440px; width: 100%;
+  }
+  .modal h2 {
+    font-size: 13px; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--cyan-bright); margin-bottom: 10px;
+    border-bottom: 1px solid var(--line); padding-bottom: 10px;
+  }
+  .modal p { font-size: 12px; color: var(--dim); line-height: 1.6; margin-bottom: 16px; }
+  .modal p a { color: var(--cyan-bright); border-bottom: 1px solid; text-decoration: none; }
+  .modal input {
+    width: 100%; background: rgba(0,212,255,.05); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 12px; margin-bottom: 14px;
+    font: inherit; font-size: 13px; outline: none;
+    caret-color: var(--cyan-bright);
+  }
+  .modal input:focus { border-color: var(--cyan-bright); }
+  .modal .row { display: flex; gap: 8px; }
+  .modal button {
+    flex: 1; padding: 12px; border-radius: 4px;
+    font-family: inherit; font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; border: 1px solid var(--cyan-bright);
+  }
+  .modal .primary { background: var(--cyan-bright); color: #001114; font-weight: 700; }
+  .modal .ghost { background: transparent; color: var(--dim); border-color: var(--line); }
+
+  /* boot */
+  .boot {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 999;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    font-size: 11px; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--cyan);
+    cursor: pointer;
+    /* Auto-fade via pure CSS so it dismisses even when JS is disabled */
+    animation: boot-fade .8s ease forwards 3.2s;
+  }
+  .boot.gone { opacity: 0; pointer-events: none; }
+  @keyframes boot-fade { to { opacity: 0; pointer-events: none; } }
+  .boot .b-title {
+    font-size: 18px; letter-spacing: 8px; color: var(--fg);
+    text-shadow: 0 0 10px var(--cyan-glow);
+    margin-bottom: 30px;
+  }
+  .boot .b-line { margin: 4px 0; opacity: 0; animation: bl-in .2s forwards; }
+  .boot .b-line.d1 { animation-delay: .2s; }
+  .boot .b-line.d2 { animation-delay: .7s; }
+  .boot .b-line.d3 { animation-delay: 1.2s; }
+  .boot .b-line.d4 { animation-delay: 1.7s; }
+  .boot .b-line.d5 { animation-delay: 2.2s; }
+  @keyframes bl-in { to { opacity: .85; } }
+  .boot .ok { color: var(--cyan-bright); }
+  .boot .progress {
+    margin-top: 28px; width: 260px; height: 2px;
+    background: var(--line); overflow: hidden; position: relative;
+  }
+  .boot .progress::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, var(--cyan-bright), transparent);
+    animation: p-anim 2.8s ease-out forwards;
+  }
+  @keyframes p-anim { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  .boot .hint {
+    margin-top: 28px;
+    font-size: 9px; letter-spacing: 3px;
+    color: var(--orange-soft);
+    text-align: center;
+    max-width: 320px; padding: 0 20px;
+    line-height: 1.6;
+    opacity: 0;
+    animation: bl-in .4s forwards 2.6s;
+  }
+  .boot .hint b { color: var(--orange); }
+
+  @media (max-width: 600px) {
+    .satellite { width: 90px; height: 90px; }
+    .satellite .core { inset: 28px; }
+    .satellite .ring-inner { inset: 14px; }
+    .satellite .ic { font-size: 16px; }
+    .satellite .label { font-size: 8px; bottom: -18px; }
+    .jarvis-label .glyph { font-size: 18px; letter-spacing: 6px; }
+    .mic-btn { width: 56px; height: 56px; font-size: 22px; }
+    .sitrep-btn, .text-btn { height: 38px; padding: 0 14px; font-size: 9px; }
+    .voice-dock { gap: 8px; bottom: 36px; }
+    .transcript { font-size: 11px; bottom: 120px; }
+    .hud-top { padding: 12px 14px; }
+    .hud-bottom { padding: 0 12px; font-size: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- BOOT -->
+<div class="boot" id="boot">
+  <div class="b-title">J.A.R.V.I.S</div>
+  <div class="b-line d1">▸ Initializing core systems<span class="ok"> · OK</span></div>
+  <div class="b-line d2">▸ Loading Claude Opus 4.8<span class="ok"> · OK</span></div>
+  <div class="b-line d3">▸ Voice synthesis online<span class="ok"> · OK</span></div>
+  <div class="b-line d4">▸ Connecting 7 planets<span class="ok"> · OK</span></div>
+  <div class="b-line d5">▸ At your service, sir<span class="ok"> · ✓</span></div>
+  <div class="progress"></div>
+  <div class="hint">Если экран не оживает — открой страницу в <b>Safari / Chrome</b>, не в preview / Telegram. Тап в любом месте чтобы пропустить.</div>
+</div>
+
+<div class="stage-bg"></div>
+<canvas id="scene"></canvas>
+<div class="scanlines"></div>
+
+<!-- TOP HUD -->
+<div class="hud-top">
+  <div class="brand">
+    <div class="ring"></div>
+    <div class="name">J.A.R.V.I.S</div>
+  </div>
+  <button class="api-btn" id="settingsBtn">⚙ API KEY</button>
+</div>
+
+<!-- BOTTOM HUD -->
+<div class="hud-bottom">
+  <div>SYS <span class="ok">●</span> ONLINE · OPUS 4.8 <span class="blink">▮</span></div>
+  <div id="latency">LATENCY 38ms · ALL OPERATIONAL</div>
+</div>
+
+<!-- STATE BADGE + JARVIS LOGO -->
+<div class="state-badge" id="stateBadge" data-state="idle">▮ STANDBY</div>
+<div class="jarvis-label">
+  <div class="glyph">JARVIS<small>Claude Opus 4.8</small></div>
+</div>
+
+<!-- 4 SATELLITES (planet groups) -->
+<div class="satellite sat-1" data-node="health"><div class="ring-outer"></div><div class="ring-inner"></div><div class="core"></div><div class="ic">🫀</div><div class="label">HEALTH</div></div>
+<div class="satellite sat-2" data-node="saas"><div class="ring-outer"></div><div class="ring-inner"></div><div class="core"></div><div class="ic">🚀</div><div class="label">PRODUCT</div></div>
+<div class="satellite sat-3" data-node="finance"><div class="ring-outer"></div><div class="ring-inner"></div><div class="core"></div><div class="ic">💰</div><div class="label">FINANCE</div></div>
+<div class="satellite sat-4" data-node="ventures"><div class="ring-outer"></div><div class="ring-inner"></div><div class="core"></div><div class="ic">💡</div><div class="label">VENTURES</div></div>
+
+<!-- TRANSCRIPT BUBBLE -->
+<div class="transcript" id="transcript"></div>
+
+<!-- VOICE DOCK -->
+<div class="voice-dock">
+  <button class="text-btn" id="textBtn">💬 TEXT</button>
+  <button class="mic-btn" id="micBtn" title="Hold to speak">🎙</button>
+  <button class="sitrep-btn" id="sitrepBtn">▶ SITREP</button>
+</div>
+
+<!-- CHAT PANEL -->
+<aside class="panel" id="panel">
+  <div class="panel-head">
+    <div class="led"></div>
+    <div class="name">CHANNEL: <b id="pName">JARVIS</b></div>
+    <button class="close" id="closeBtn">✕</button>
+  </div>
+  <div class="channel-info" id="pInfo">Chief Orchestrator · Claude Opus 4.8</div>
+  <div class="msgs" id="msgs"></div>
+  <div class="composer">
+    <textarea id="input" placeholder="> address Jarvis..."></textarea>
+    <button id="sendBtn">→</button>
+  </div>
+</aside>
+
+<!-- MODAL -->
+<div class="modal" id="modal">
+  <div class="card">
+    <h2>ANTHROPIC ACCESS KEY</h2>
+    <p>Впиши API-ключ из <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>. Хранится в твоём браузере. Запросы идут напрямую в Anthropic.</p>
+    <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" />
+    <div class="row">
+      <button class="ghost" id="cancelKey">LATER</button>
+      <button class="primary" id="saveKey">CONFIRM</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CORE: living JARVIS scene
+// ============================================================
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W = 0, H = 0, CX = 0, CY = 0, BASE_R = 0;
+
+function resize() {
+  W = canvas.width = window.innerWidth * DPR;
+  H = canvas.height = window.innerHeight * DPR;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  CX = W / 2; CY = H / 2;
+  BASE_R = Math.min(W, H) * 0.18;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// STATE: idle | listening | thinking | speaking | diving
+const STATE = {
+  mode: 'idle',
+  intensity: 0,        // 0..1 — visual energy boost
+  pulse: 0,            // 0..1 — voice amplitude
+  diveTarget: null,
+  diveProgress: 0,     // 0..1
+  rotationY: 0,
+  rotationX: 0,
+};
+
+function setState(mode) {
+  STATE.mode = mode;
+  document.getElementById('stateBadge').dataset.state = mode;
+  document.getElementById('stateBadge').textContent = ({
+    idle: '▮ STANDBY',
+    listening: '◉ LISTENING',
+    thinking: '⟳ PROCESSING',
+    speaking: '▶ SPEAKING',
+    diving: '↧ DIVING',
+  })[mode];
+}
+
+// Core particle sphere
+const CORE_PTS = [];
+const N_LAT = 18, N_LON = 26;
+for (let i = 1; i < N_LAT; i++) {
+  const phi = Math.PI * i / N_LAT;
+  for (let j = 0; j < N_LON; j++) {
+    const theta = 2 * Math.PI * j / N_LON;
+    CORE_PTS.push({
+      x: Math.sin(phi) * Math.cos(theta),
+      y: Math.cos(phi),
+      z: Math.sin(phi) * Math.sin(theta),
+      // each particle gets independent jitter and orange-ness
+      jitter: Math.random() * Math.PI * 2,
+      orangeBias: Math.random() < 0.18 ? 1 : 0,
+    });
+  }
+}
+
+// Random small inner blobs for organic core feel
+const INNER_BLOBS = Array.from({ length: 24 }, () => ({
+  angle: Math.random() * Math.PI * 2,
+  speed: 0.0003 + Math.random() * 0.0008,
+  r: 0.2 + Math.random() * 0.5,
+  size: 0.6 + Math.random() * 1.4,
+  phase: Math.random() * Math.PI * 2,
+}));
+
+// Floating telemetry text
+const TELEMETRY_LINES = [
+  'SYS://BOOT v4.8.12 ::COREMOD OK',
+  'NEURAL/PARSE >> resolving intent',
+  'PLANET.HEALTH … nominal',
+  'PLANET.FIN … cash-flow stable',
+  'PLANET.SAAS … 3 PRs pending',
+  'MEM.CTX 24KB / 200KB',
+  'OPUS4.8 :: temp 0.4',
+  'VOX :: en-GB-male loaded',
+  '◇ awaiting directive ◇',
+  'TRACE [0xAF12.3D] ok',
+  'SCAN → 7 systems · 9 streams',
+  'PRIORITY QUEUE [0]',
+];
+const TEXT_NODES = Array.from({ length: 16 }, (_, i) => ({
+  text: TELEMETRY_LINES[i % TELEMETRY_LINES.length],
+  angle: Math.random() * Math.PI * 2,
+  radius: 0.9 + Math.random() * 0.7,
+  drift: 0.00006 + Math.random() * 0.0001,
+  alphaPhase: Math.random() * Math.PI * 2,
+}));
+
+function rotateY(p, a) { const c=Math.cos(a),s=Math.sin(a); return { x:p.x*c-p.z*s, y:p.y, z:p.x*s+p.z*c }; }
+function rotateX(p, a) { const c=Math.cos(a),s=Math.sin(a); return { x:p.x, y:p.y*c-p.z*s, z:p.y*s+p.z*c }; }
+
+let t0 = performance.now();
+function frame(now) {
+  const dt = now - t0;
+  ctx.clearRect(0, 0, W, H);
+
+  // ease intensity toward target
+  let targetIntensity = 0.15;
+  if (STATE.mode === 'listening') targetIntensity = 0.55 + STATE.pulse * 0.45;
+  else if (STATE.mode === 'thinking') targetIntensity = 0.85;
+  else if (STATE.mode === 'speaking') targetIntensity = 0.7 + STATE.pulse * 0.6;
+  STATE.intensity += (targetIntensity - STATE.intensity) * 0.08;
+
+  // base rotation; spin faster while thinking, much faster while diving
+  let spinY = 0.00045;
+  if (STATE.mode === 'thinking') spinY = 0.0028;
+  else if (STATE.mode === 'speaking') spinY = 0.0011;
+  else if (STATE.mode === 'diving') spinY = 0.006;
+  STATE.rotationY += spinY;
+  STATE.rotationX = Math.sin(dt * 0.0004) * 0.28;
+
+  // diving = scale up the whole scene
+  let scale = 1;
+  if (STATE.mode === 'diving') {
+    STATE.diveProgress = Math.min(1, STATE.diveProgress + 0.025);
+    scale = 1 + STATE.diveProgress * 2.2;
+  }
+
+  const breathe = 1 + 0.045 * Math.sin(dt * 0.0018) + STATE.intensity * 0.06;
+  const R = BASE_R * breathe * scale;
+
+  // ----- background ambient haze -----
+  ctx.globalCompositeOperation = 'lighter';
+  const haze = ctx.createRadialGradient(CX, CY, 0, CX, CY, R * 4);
+  haze.addColorStop(0, `rgba(0,212,255,${0.18 + STATE.intensity * 0.15})`);
+  haze.addColorStop(0.35, `rgba(0,140,200,${0.05 + STATE.intensity * 0.08})`);
+  haze.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, 0, W, H);
+
+  // ----- concentric HUD rings (3 layers) -----
+  const rings = [
+    { r: R * 1.55, w: 1.2, color: 'rgba(0,212,255,0.7)', spin: 0.00035, ticks: 60 },
+    { r: R * 1.95, w: 1.0, color: 'rgba(255,140,42,0.55)', spin: -0.0002, ticks: 36 },
+    { r: R * 2.5,  w: 0.8, color: 'rgba(0,212,255,0.45)', spin: 0.00015, ticks: 90 },
+  ];
+  rings.forEach((ring, idx) => {
+    const rr = ring.r;
+    ctx.strokeStyle = ring.color;
+    ctx.lineWidth = ring.w * DPR;
+    ctx.beginPath();
+    ctx.arc(CX, CY, rr, 0, Math.PI * 2);
+    ctx.stroke();
+    // ticks
+    const tickRot = dt * ring.spin;
+    for (let i = 0; i < ring.ticks; i++) {
+      const a = (i / ring.ticks) * Math.PI * 2 + tickRot;
+      const isMajor = i % 5 === 0;
+      const r1 = rr;
+      const r2 = rr + (isMajor ? 12 : 5) * DPR;
+      ctx.strokeStyle = isMajor ? ring.color : ring.color.replace(/[\d.]+\)$/, m => (parseFloat(m) * 0.5) + ')');
+      ctx.lineWidth = (isMajor ? 1.2 : 0.6) * DPR;
+      ctx.beginPath();
+      ctx.moveTo(CX + Math.cos(a) * r1, CY + Math.sin(a) * r1);
+      ctx.lineTo(CX + Math.cos(a) * r2, CY + Math.sin(a) * r2);
+      ctx.stroke();
+    }
+    // markers (rotating dots)
+    for (let i = 0; i < 3; i++) {
+      const a = tickRot * (idx + 1.4) + i * Math.PI * 2 / 3;
+      const x = CX + Math.cos(a) * rr;
+      const y = CY + Math.sin(a) * rr;
+      ctx.beginPath();
+      ctx.fillStyle = idx === 1 ? `rgba(255,170,80,${0.6 + STATE.intensity * 0.4})` : `rgba(128,240,255,${0.7 + STATE.intensity * 0.3})`;
+      ctx.arc(x, y, (3 + STATE.intensity * 3) * DPR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  // ----- inner blobs (organic core feel) -----
+  INNER_BLOBS.forEach(b => {
+    b.angle += b.speed;
+    const wob = 1 + 0.4 * Math.sin(dt * 0.001 + b.phase) + STATE.intensity * 0.5;
+    const x = CX + Math.cos(b.angle) * R * b.r * 0.85;
+    const y = CY + Math.sin(b.angle) * R * b.r * 0.85;
+    const orange = STATE.mode === 'thinking' || STATE.mode === 'speaking' ? 1 : 0.4;
+    const cb = ctx.createRadialGradient(x, y, 0, x, y, b.size * 14 * DPR * wob);
+    cb.addColorStop(0, `rgba(255,170,80,${orange * 0.35 * (0.4 + STATE.intensity)})`);
+    cb.addColorStop(0.4, `rgba(0,180,240,${0.25 * (0.4 + STATE.intensity)})`);
+    cb.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = cb;
+    ctx.fillRect(x - b.size * 14 * DPR * wob, y - b.size * 14 * DPR * wob, b.size * 28 * DPR * wob, b.size * 28 * DPR * wob);
+  });
+
+  // ----- particle sphere -----
+  for (let i = 0; i < CORE_PTS.length; i++) {
+    let p = CORE_PTS[i];
+    let q = rotateY(p, STATE.rotationY);
+    q = rotateX(q, STATE.rotationX);
+    const depth = (q.z + 1) / 2;
+    // jitter from intensity
+    const jx = Math.sin(dt * 0.002 + p.jitter) * STATE.intensity * 4 * DPR;
+    const jy = Math.cos(dt * 0.002 + p.jitter) * STATE.intensity * 4 * DPR;
+    const x = CX + q.x * R + jx;
+    const y = CY + q.y * R + jy;
+    let alpha = (0.2 + 0.75 * depth) * (0.7 + STATE.intensity * 0.5);
+    let size = (0.7 + 1.6 * depth) * DPR;
+
+    // accent particles → orange tint, especially when active
+    let r, g, b;
+    if (p.orangeBias && (STATE.mode === 'thinking' || STATE.mode === 'speaking' || STATE.intensity > 0.4)) {
+      r = 255; g = 170; b = 80;
+      size *= 1.4;
+      alpha *= 1.1;
+    } else {
+      r = 128; g = 240; b = 255;
+    }
+    // bloom halo
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.18})`;
+    ctx.arc(x, y, size * 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    // core
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ----- energy filaments (when thinking/speaking) -----
+  if (STATE.intensity > 0.35) {
+    ctx.globalCompositeOperation = 'lighter';
+    const filaments = 14;
+    for (let i = 0; i < filaments; i++) {
+      const a = (i / filaments) * Math.PI * 2 + dt * 0.0008;
+      const r1 = R * 0.4;
+      const r2 = R * (1.2 + STATE.intensity * 0.6);
+      const grad = ctx.createLinearGradient(
+        CX + Math.cos(a) * r1, CY + Math.sin(a) * r1,
+        CX + Math.cos(a) * r2, CY + Math.sin(a) * r2,
+      );
+      grad.addColorStop(0, `rgba(255,170,80,${STATE.intensity * 0.7})`);
+      grad.addColorStop(1, 'rgba(0,180,240,0)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.5 * DPR;
+      ctx.beginPath();
+      ctx.moveTo(CX + Math.cos(a) * r1, CY + Math.sin(a) * r1);
+      ctx.lineTo(CX + Math.cos(a) * r2, CY + Math.sin(a) * r2);
+      ctx.stroke();
+    }
+  }
+
+  // ----- telemetry text floating around -----
+  ctx.font = `${9 * DPR}px "JetBrains Mono", monospace`;
+  ctx.textAlign = 'left';
+  TEXT_NODES.forEach(node => {
+    node.angle += node.drift;
+    const a = node.angle;
+    const r = R * node.radius;
+    const x = CX + Math.cos(a) * r;
+    const y = CY + Math.sin(a) * r;
+    const alpha = 0.35 + 0.25 * Math.sin(dt * 0.0008 + node.alphaPhase);
+    ctx.fillStyle = `rgba(128,240,255,${alpha})`;
+    ctx.fillText(node.text, x, y);
+  });
+
+  ctx.globalCompositeOperation = 'source-over';
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ============================================================
+// VOICE: speech recognition + synthesis
+// ============================================================
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let micActive = false;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'ru-RU';
+
+  recognition.onstart = () => { setState('listening'); };
+  recognition.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) final += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    showTranscript('user-text', interim || final);
+    if (final) {
+      handleUserSpeech(final.trim());
+    }
+  };
+  recognition.onerror = (e) => {
+    console.warn('STT error', e);
+    setState('idle');
+    hideTranscript();
+  };
+  recognition.onend = () => {
+    if (micActive) {
+      // user is still holding; restart
+      try { recognition.start(); } catch (_) {}
+    } else if (STATE.mode === 'listening') {
+      setState('idle');
+      hideTranscript();
+    }
+  };
+}
+
+const micBtn = document.getElementById('micBtn');
+micBtn.addEventListener('click', () => {
+  if (!recognition) {
+    alert('Голосовой ввод не поддерживается этим браузером. Открой в Safari/Chrome.');
+    return;
+  }
+  if (!localStorage.getItem('anthropic_key')) { openModal(); return; }
+  if (micActive) {
+    micActive = false;
+    micBtn.classList.remove('listening');
+    try { recognition.stop(); } catch (_) {}
+  } else {
+    micActive = true;
+    micBtn.classList.add('listening');
+    try { recognition.start(); } catch (_) {}
+  }
+});
+
+// ----- TTS — pick best British male voice -----
+let chosenVoice = null;
+function pickVoice() {
+  const voices = speechSynthesis.getVoices();
+  // priority: Daniel (Mac), Google UK English Male, Microsoft Ryan
+  chosenVoice = voices.find(v => /Daniel/i.test(v.name) && /en[-_]GB/i.test(v.lang))
+    || voices.find(v => /Google UK English Male/i.test(v.name))
+    || voices.find(v => /Ryan/i.test(v.name) && /en[-_]GB/i.test(v.lang))
+    || voices.find(v => /en[-_]GB/i.test(v.lang))
+    || voices.find(v => /en/i.test(v.lang))
+    || voices[0];
+}
+if ('speechSynthesis' in window) {
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  if (chosenVoice) u.voice = chosenVoice;
+  u.rate = 1.05; u.pitch = 0.85; u.volume = 1;
+  setState('speaking');
+  // fake amplitude pulse — speech API doesn't expose volume, so simulate
+  let speakingPulse = setInterval(() => {
+    STATE.pulse = Math.random() * 0.8 + 0.2;
+  }, 70);
+  u.onend = () => {
+    clearInterval(speakingPulse);
+    STATE.pulse = 0;
+    setState('idle');
+    setTimeout(hideTranscript, 1500);
+  };
+  showTranscript('jarvis-text', text);
+  speechSynthesis.speak(u);
+}
+
+const transcriptEl = document.getElementById('transcript');
+function showTranscript(cls, text) {
+  transcriptEl.className = 'transcript on ' + cls;
+  transcriptEl.textContent = text;
+}
+function hideTranscript() {
+  transcriptEl.classList.remove('on');
+}
+
+// ----- microphone volume monitoring for visual pulse -----
+let audioCtx = null, micAnalyser = null;
+async function startMicAnalyser() {
+  if (!navigator.mediaDevices) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    micAnalyser = audioCtx.createAnalyser();
+    micAnalyser.fftSize = 256;
+    src.connect(micAnalyser);
+    const buf = new Uint8Array(micAnalyser.frequencyBinCount);
+    const tick = () => {
+      micAnalyser.getByteFrequencyData(buf);
+      const sum = buf.reduce((s, v) => s + v, 0);
+      const avg = sum / buf.length / 255;
+      STATE.pulse = avg * 2.5;
+      requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) {
+    console.warn('mic analyser failed', e);
+  }
+}
+
+// ============================================================
+// JARVIS conversation
+// ============================================================
+const JARVIS_NODE = {
+  name: 'JARVIS',
+  desc: 'Chief Orchestrator · Claude Opus 4.8',
+  model: 'claude-opus-4-8',
+  system:
+    "Ты — JARVIS (Just A Rather Very Intelligent System), персональный AI-дворецкий Farrukh. " +
+    "Стиль как у Тони Старка из Iron Man: уважительный, остроумный, краткий, проактивный. " +
+    "Координируешь 7 планет (Health, Finance, Product, Marketing, Family, Learning, Ventures). " +
+    "Обращайся 'сэр'. Используй маркеры ▮ ▶ ⚠ ✓. Заканчивай 1–3 NEXT STEPS. " +
+    "ВАЖНО: твой ответ будет ОЗВУЧЕН синтезатором. Пиши КОРОТКО (1-3 предложения), " +
+    "без markdown, без списков, без эмодзи в речи — только обычный текст. " +
+    "Будь как живой ассистент, не как формальный бот.",
+};
+
+const PLANET_NODES = {
+  health:    { name: 'HEALTH',    desc: 'body · mind',    model: 'claude-sonnet-4-6', system: 'Ты — VP по Здоровью. Кратко, действиями.' },
+  finance:   { name: 'FINANCE',   desc: 'cash · runway',  model: 'claude-sonnet-4-6', system: 'Ты — CFO. Считаешь и предупреждаешь.' },
+  saas:      { name: 'PRODUCT',   desc: 'roadmap · ship', model: 'claude-sonnet-4-6', system: 'Ты — CPO/CTO. Приоритезируешь.' },
+  marketing: { name: 'MARKETING', desc: 'reach · brand',  model: 'claude-sonnet-4-6', system: 'Ты — CMO.' },
+  personal:  { name: 'FAMILY',    desc: 'people · time',  model: 'claude-sonnet-4-6', system: 'Куратор личной жизни. Бережно.' },
+  learning:  { name: 'LEARNING',  desc: 'books · skills', model: 'claude-sonnet-4-6', system: 'Куратор обучения.' },
+  ventures:  { name: 'VENTURES',  desc: 'ideas · validate', model: 'claude-sonnet-4-6', system: 'Head of Ventures. ICE/RICE.' },
+};
+
+const HIST = {};
+
+async function handleUserSpeech(text) {
+  setState('thinking');
+  hideTranscript();
+  const hist = HIST.jarvis = HIST.jarvis || [];
+  hist.push({ role: 'user', content: text });
+  try {
+    const reply = await callClaude(JARVIS_NODE, hist);
+    hist.push({ role: 'assistant', content: reply });
+    speak(reply);
+    // mirror to text panel if open
+    if (panel.classList.contains('open')) {
+      addMsg('user', text);
+      addMsg('bot', reply);
+    }
+  } catch (e) {
+    setState('idle');
+    speak('Простите сэр, что-то пошло не так. ' + (e.message || ''));
+  }
+}
+
+async function callClaude(node, history) {
+  const key = localStorage.getItem('anthropic_key');
+  if (!key) { openModal(); throw new Error('no key'); }
+  const profile = localStorage.getItem('profile') ||
+    'Farrukh — лайфкоуч, строит SaaS и личный бренд. Ценит свободу, рост, влияние, семью.';
+  const system = `${node.system}\n\n--- Профиль Farrukh ---\n${profile}\n--- Конец ---`;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: node.model || 'claude-sonnet-4-6',
+      max_tokens: 600,
+      system,
+      messages: history.map(m => ({ role: m.role, content: m.content })),
+    }),
+  });
+  if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+}
+
+// ============================================================
+// SITREP
+// ============================================================
+document.getElementById('sitrepBtn').addEventListener('click', () => {
+  if (!localStorage.getItem('anthropic_key')) { openModal(); return; }
+  handleUserSpeech(
+    'JARVIS, дай короткий устный SITREP по семи планетам Farrukh: HEALTH, FINANCE, PRODUCT, MARKETING, FAMILY, LEARNING, VENTURES. ' +
+    'По 5-7 секунд на каждую максимум. Заверши главным приоритетом дня. Говори как лайв-репортаж.'
+  );
+});
+
+// ============================================================
+// Satellite click → DIVE animation → open chat
+// ============================================================
+document.querySelectorAll('.satellite').forEach(el => {
+  el.addEventListener('click', () => {
+    const key = el.getAttribute('data-node');
+    const node = PLANET_NODES[key];
+    if (!node) return;
+    STATE.diveTarget = key;
+    STATE.diveProgress = 0;
+    setState('diving');
+    setTimeout(() => {
+      openPanel(key, node);
+      // reset dive
+      STATE.diveProgress = 0;
+      setState('idle');
+    }, 700);
+  });
+});
+
+// ============================================================
+// TEXT panel
+// ============================================================
+const panel = document.getElementById('panel');
+const msgsEl = document.getElementById('msgs');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const pNameEl = document.getElementById('pName');
+const pInfoEl = document.getElementById('pInfo');
+
+let activeNode = null;
+function openPanel(key, node, autoQuery) {
+  activeNode = { key, ...node };
+  pNameEl.textContent = node.name;
+  pInfoEl.textContent = node.desc;
+  msgsEl.innerHTML = '';
+  const h = HIST[key] || [];
+  if (h.length === 0) {
+    addMsg('sys', key === 'jarvis' ? '▮ JARVIS ONLINE · OPUS 4.8' : `CHANNEL OPEN — ${node.name}`);
+  } else {
+    h.forEach(m => addMsg(m.role === 'user' ? 'user' : 'bot', m.content));
+  }
+  panel.classList.add('open');
+  setTimeout(() => inputEl.focus(), 350);
+  if (autoQuery) { inputEl.value = autoQuery; setTimeout(send, 200); }
+}
+document.getElementById('closeBtn').addEventListener('click', () => panel.classList.remove('open'));
+document.getElementById('textBtn').addEventListener('click', () => openPanel('jarvis', JARVIS_NODE));
+
+function addMsg(kind, text) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + kind;
+  el.textContent = text;
+  msgsEl.appendChild(el);
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+  return el;
+}
+
+async function send() {
+  const txt = inputEl.value.trim();
+  if (!txt || !activeNode) return;
+  if (!localStorage.getItem('anthropic_key')) { openModal(); return; }
+  inputEl.value = '';
+  addMsg('user', txt);
+  const hist = HIST[activeNode.key] = HIST[activeNode.key] || [];
+  hist.push({ role: 'user', content: txt });
+  sendBtn.disabled = true;
+  const ph = addMsg('bot', '...');
+  setState('thinking');
+  try {
+    const reply = await callClaude(activeNode, hist);
+    ph.textContent = reply;
+    hist.push({ role: 'assistant', content: reply });
+    if (activeNode.key === 'jarvis') speak(reply);
+    else setState('idle');
+  } catch (e) {
+    ph.textContent = '⚠ ' + (e.message || 'error');
+    ph.style.color = '#ff7777';
+    setState('idle');
+  } finally {
+    sendBtn.disabled = false;
+  }
+}
+sendBtn.addEventListener('click', send);
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+// ============================================================
+// modal
+// ============================================================
+const modal = document.getElementById('modal');
+const apiKeyInput = document.getElementById('apiKey');
+function openModal() {
+  apiKeyInput.value = localStorage.getItem('anthropic_key') || '';
+  modal.classList.add('open');
+  setTimeout(() => apiKeyInput.focus(), 50);
+}
+document.getElementById('settingsBtn').addEventListener('click', openModal);
+document.getElementById('cancelKey').addEventListener('click', () => modal.classList.remove('open'));
+document.getElementById('saveKey').addEventListener('click', () => {
+  const v = apiKeyInput.value.trim();
+  if (v) localStorage.setItem('anthropic_key', v);
+  else localStorage.removeItem('anthropic_key');
+  modal.classList.remove('open');
+});
+
+// ============================================================
+// Boot
+// ============================================================
+setTimeout(() => {
+  document.getElementById('boot').classList.add('gone');
+  // greet on first load
+  if (localStorage.getItem('anthropic_key')) {
+    setTimeout(() => speak('At your service, sir.'), 600);
+  }
+}, 3200);
+
+if (!localStorage.getItem('anthropic_key')) {
+  setTimeout(openModal, 4200);
+}
+</script>
+</body>
+</html>

@@ -468,7 +468,7 @@
     <div class="ring"></div>
     <div class="name">J.A.R.V.I.S</div>
   </div>
-  <button class="api-btn" id="settingsBtn">⚙ API KEY</button>
+  <button class="api-btn" id="settingsBtn">⚙ PROFILE</button>
 </div>
 
 <!-- BOTTOM HUD -->
@@ -841,7 +841,6 @@ micBtn.addEventListener('click', () => {
     alert('Голосовой ввод не поддерживается этим браузером. Открой в Safari/Chrome.');
     return;
   }
-  if (!localStorage.getItem('anthropic_key')) { openModal(); return; }
   if (micActive) {
     micActive = false;
     micBtn.classList.remove('listening');
@@ -975,22 +974,20 @@ async function handleUserSpeech(text) {
 }
 
 async function callClaude(node, history) {
-  const key = localStorage.getItem('anthropic_key');
-  if (!key) { openModal(); throw new Error('no key'); }
   const profile = localStorage.getItem('profile') ||
     'Farrukh — лайфкоуч, строит SaaS и личный бренд. Ценит свободу, рост, влияние, семью.';
   const system = `${node.system}\n\n--- Профиль Farrukh ---\n${profile}\n--- Конец ---`;
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const SUPA_KEY = 'sb_publishable_RgOAI7MLVztrdNVihUO3VQ_NUtSHWU7';
+  const res = await fetch('https://umtyhyaeerkmofqmzvwr.supabase.co/functions/v1/jarvis?chat=1', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
     },
     body: JSON.stringify({
       model: node.model || 'claude-sonnet-4-6',
-      max_tokens: 600,
+      max_tokens: 1800,
       system,
       messages: history.map(m => ({ role: m.role, content: m.content })),
     }),
@@ -1004,7 +1001,6 @@ async function callClaude(node, history) {
 // SITREP
 // ============================================================
 document.getElementById('sitrepBtn').addEventListener('click', () => {
-  if (!localStorage.getItem('anthropic_key')) { openModal(); return; }
   handleUserSpeech(
     'JARVIS, дай короткий устный SITREP по семи планетам Farrukh: HEALTH, FINANCE, PRODUCT, MARKETING, FAMILY, LEARNING, VENTURES. ' +
     'По 5-7 секунд на каждую максимум. Заверши главным приоритетом дня. Говори как лайв-репортаж.'
@@ -1072,7 +1068,6 @@ function addMsg(kind, text) {
 async function send() {
   const txt = inputEl.value.trim();
   if (!txt || !activeNode) return;
-  if (!localStorage.getItem('anthropic_key')) { openModal(); return; }
   inputEl.value = '';
   addMsg('user', txt);
   const hist = HIST[activeNode.key] = HIST[activeNode.key] || [];
@@ -1123,15 +1118,8 @@ document.getElementById('saveKey').addEventListener('click', () => {
 // ============================================================
 setTimeout(() => {
   document.getElementById('boot').classList.add('gone');
-  // greet on first load
-  if (localStorage.getItem('anthropic_key')) {
-    setTimeout(() => speak('At your service, sir.'), 600);
-  }
+  setTimeout(() => speak('At your service, sir.'), 600);
 }, 3200);
-
-if (!localStorage.getItem('anthropic_key')) {
-  setTimeout(openModal, 4200);
-}
 </script>
 </body>
 </html>

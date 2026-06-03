@@ -443,6 +443,14 @@
     .hud-bottom { padding: 0 12px; font-size: 8px; }
   }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.160.0",
+    "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -468,7 +476,7 @@
     <div class="ring"></div>
     <div class="name">J.A.R.V.I.S</div>
   </div>
-  <button class="api-btn" id="settingsBtn">⚙ PROFILE</button>
+  <button class="api-btn" id="settingsBtn">⚙ API KEY</button>
 </div>
 
 <!-- BOTTOM HUD -->
@@ -527,35 +535,24 @@
   </div>
 </div>
 
-<script>
-// ============================================================
-// CORE: living JARVIS scene
-// ============================================================
-const canvas = document.getElementById('scene');
-const ctx = canvas.getContext('2d');
-const DPR = Math.min(window.devicePixelRatio || 1, 2);
-let W = 0, H = 0, CX = 0, CY = 0, BASE_R = 0;
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
 
-function resize() {
-  W = canvas.width = window.innerWidth * DPR;
-  H = canvas.height = window.innerHeight * DPR;
-  canvas.style.width = window.innerWidth + 'px';
-  canvas.style.height = window.innerHeight + 'px';
-  CX = W / 2; CY = H / 2;
-  BASE_R = Math.min(W, H) * 0.18;
-}
-resize();
-window.addEventListener('resize', resize);
-
-// STATE: idle | listening | thinking | speaking | diving
+// ============================================================
+// STATE machine: idle | listening | thinking | speaking | diving
+// ============================================================
 const STATE = {
   mode: 'idle',
-  intensity: 0,        // 0..1 — visual energy boost
-  pulse: 0,            // 0..1 — voice amplitude
+  intensity: 0,
+  pulse: 0,
   diveTarget: null,
-  diveProgress: 0,     // 0..1
-  rotationY: 0,
-  rotationX: 0,
+  diveProgress: 0,
 };
 
 function setState(mode) {
@@ -569,229 +566,348 @@ function setState(mode) {
     diving: '↧ DIVING',
   })[mode];
 }
+window.setState = setState; // for legacy callers
+window.STATE = STATE;
 
-// Core particle sphere
-const CORE_PTS = [];
-const N_LAT = 18, N_LON = 26;
-for (let i = 1; i < N_LAT; i++) {
-  const phi = Math.PI * i / N_LAT;
-  for (let j = 0; j < N_LON; j++) {
-    const theta = 2 * Math.PI * j / N_LON;
-    CORE_PTS.push({
-      x: Math.sin(phi) * Math.cos(theta),
-      y: Math.cos(phi),
-      z: Math.sin(phi) * Math.sin(theta),
-      // each particle gets independent jitter and orange-ness
-      jitter: Math.random() * Math.PI * 2,
-      orangeBias: Math.random() < 0.18 ? 1 : 0,
-    });
-  }
+// ============================================================
+// Web Audio: UI sound effects (sci-fi clicks/blips)
+// ============================================================
+let AC = null;
+function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); return AC; }
+function sfx(kind) {
+  try {
+    const a = ac();
+    const now = a.currentTime;
+    const osc = a.createOscillator();
+    const gain = a.createGain();
+    const filter = a.createBiquadFilter();
+    filter.type = 'bandpass'; filter.Q.value = 4;
+    const presets = {
+      click:  { f: 1800, fEnd: 600,  d: 0.07, t: 'sine',     g: 0.06 },
+      open:   { f: 600,  fEnd: 1800, d: 0.18, t: 'triangle', g: 0.05 },
+      close:  { f: 1400, fEnd: 400,  d: 0.14, t: 'triangle', g: 0.05 },
+      dive:   { f: 220,  fEnd: 1400, d: 0.45, t: 'sawtooth', g: 0.07 },
+      blip:   { f: 2200, fEnd: 2200, d: 0.04, t: 'square',   g: 0.04 },
+      thunk:  { f: 80,   fEnd: 35,   d: 0.25, t: 'sine',     g: 0.10 },
+      error:  { f: 220,  fEnd: 80,   d: 0.30, t: 'sawtooth', g: 0.08 },
+    };
+    const p = presets[kind] || presets.click;
+    osc.type = p.t;
+    osc.frequency.setValueAtTime(p.f, now);
+    osc.frequency.exponentialRampToValueAtTime(p.fEnd, now + p.d);
+    filter.frequency.setValueAtTime(p.f * 1.5, now);
+    gain.gain.setValueAtTime(p.g, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + p.d);
+    osc.connect(filter).connect(gain).connect(a.destination);
+    osc.start(now);
+    osc.stop(now + p.d);
+  } catch (_) {}
+}
+window.sfx = sfx;
+
+// ============================================================
+// THREE.JS scene — living holographic JARVIS
+// ============================================================
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({
+  canvas, antialias: true, alpha: true,
+  powerPreference: 'high-performance',
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0, 5);
+camera.lookAt(0, 0, 0);
+
+// ----- Custom point shader for crisp particles + glow -----
+function pointMaterial(opts = {}) {
+  const tex = makeRoundTexture();
+  return new THREE.PointsMaterial({
+    size: opts.size || 0.06,
+    map: tex,
+    alphaTest: 0.01,
+    vertexColors: true,
+    transparent: true,
+    opacity: opts.opacity ?? 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+}
+function makeRoundTexture() {
+  const size = 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
+  grad.addColorStop(0.7, 'rgba(255,255,255,0.15)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
-// Random small inner blobs for organic core feel
-const INNER_BLOBS = Array.from({ length: 24 }, () => ({
-  angle: Math.random() * Math.PI * 2,
-  speed: 0.0003 + Math.random() * 0.0008,
-  r: 0.2 + Math.random() * 0.5,
-  size: 0.6 + Math.random() * 1.4,
-  phase: Math.random() * Math.PI * 2,
-}));
+// ----- Core particle sphere (4000 points, Fibonacci distribution) -----
+const N_CORE = 4000;
+const corePos = new Float32Array(N_CORE * 3);
+const coreCol = new Float32Array(N_CORE * 3);
+const coreBaseR = new Float32Array(N_CORE);
+const coreOrange = new Uint8Array(N_CORE);
+const COLOR_CYAN = new THREE.Color(0x80f0ff);
+const COLOR_AZURE = new THREE.Color(0x00d4ff);
+const COLOR_ORANGE = new THREE.Color(0xff8c2a);
+const COLOR_AMBER = new THREE.Color(0xffae5c);
+const tmpV = new THREE.Vector3();
 
-// Floating telemetry text
-const TELEMETRY_LINES = [
-  'SYS://BOOT v4.8.12 ::COREMOD OK',
-  'NEURAL/PARSE >> resolving intent',
-  'PLANET.HEALTH … nominal',
-  'PLANET.FIN … cash-flow stable',
-  'PLANET.SAAS … 3 PRs pending',
-  'MEM.CTX 24KB / 200KB',
-  'OPUS4.8 :: temp 0.4',
-  'VOX :: en-GB-male loaded',
-  '◇ awaiting directive ◇',
-  'TRACE [0xAF12.3D] ok',
-  'SCAN → 7 systems · 9 streams',
-  'PRIORITY QUEUE [0]',
+for (let i = 0; i < N_CORE; i++) {
+  // Fibonacci-distributed sphere for even coverage
+  const phi = Math.acos(1 - 2 * (i + 0.5) / N_CORE);
+  const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
+  const r = 1.55 + (Math.random() - 0.5) * 0.05;
+  tmpV.setFromSphericalCoords(r, phi, theta);
+  corePos[i*3] = tmpV.x; corePos[i*3+1] = tmpV.y; corePos[i*3+2] = tmpV.z;
+  coreBaseR[i] = r;
+  if (Math.random() < 0.16) {
+    coreOrange[i] = 1;
+    const c = Math.random() < 0.5 ? COLOR_ORANGE : COLOR_AMBER;
+    coreCol[i*3] = c.r; coreCol[i*3+1] = c.g; coreCol[i*3+2] = c.b;
+  } else {
+    const c = Math.random() < 0.4 ? COLOR_AZURE : COLOR_CYAN;
+    coreCol[i*3] = c.r; coreCol[i*3+1] = c.g; coreCol[i*3+2] = c.b;
+  }
+}
+const coreGeom = new THREE.BufferGeometry();
+coreGeom.setAttribute('position', new THREE.BufferAttribute(corePos, 3));
+coreGeom.setAttribute('color', new THREE.BufferAttribute(coreCol, 3));
+const coreMat = pointMaterial({ size: 0.07, opacity: 0.95 });
+const corePoints = new THREE.Points(coreGeom, coreMat);
+scene.add(corePoints);
+
+// ----- Inner energy core (dense glowing nucleus) -----
+const N_NUCLEUS = 600;
+const nucPos = new Float32Array(N_NUCLEUS * 3);
+const nucCol = new Float32Array(N_NUCLEUS * 3);
+for (let i = 0; i < N_NUCLEUS; i++) {
+  const r = Math.random() * 1.0;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const theta = Math.random() * Math.PI * 2;
+  nucPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+  nucPos[i*3+1] = r * Math.cos(phi);
+  nucPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
+  const c = Math.random() < 0.3 ? COLOR_AMBER : COLOR_CYAN;
+  nucCol[i*3] = c.r * 1.3; nucCol[i*3+1] = c.g * 1.3; nucCol[i*3+2] = c.b * 1.3;
+}
+const nucGeom = new THREE.BufferGeometry();
+nucGeom.setAttribute('position', new THREE.BufferAttribute(nucPos, 3));
+nucGeom.setAttribute('color', new THREE.BufferAttribute(nucCol, 3));
+const nucMat = pointMaterial({ size: 0.12, opacity: 0.7 });
+const nucleus = new THREE.Points(nucGeom, nucMat);
+scene.add(nucleus);
+
+// ----- Outer halo / stars -----
+const N_HALO = 1800;
+const haloPos = new Float32Array(N_HALO * 3);
+const haloCol = new Float32Array(N_HALO * 3);
+for (let i = 0; i < N_HALO; i++) {
+  const r = 5 + Math.random() * 12;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const theta = Math.random() * Math.PI * 2;
+  haloPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+  haloPos[i*3+1] = r * Math.cos(phi);
+  haloPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
+  const c = Math.random() < 0.88 ? COLOR_CYAN : COLOR_ORANGE;
+  haloCol[i*3] = c.r * 0.6; haloCol[i*3+1] = c.g * 0.6; haloCol[i*3+2] = c.b * 0.6;
+}
+const haloGeom = new THREE.BufferGeometry();
+haloGeom.setAttribute('position', new THREE.BufferAttribute(haloPos, 3));
+haloGeom.setAttribute('color', new THREE.BufferAttribute(haloCol, 3));
+const haloMat = pointMaterial({ size: 0.05, opacity: 0.5 });
+const halo = new THREE.Points(haloGeom, haloMat);
+scene.add(halo);
+
+// ----- Concentric HUD rings (orbiting in 3D space) -----
+function makeRing(radius, color, opacity, segments = 256) {
+  const pts = [];
+  for (let i = 0; i <= segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
+  }
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  const m = new THREE.LineBasicMaterial({
+    color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  return new THREE.Line(g, m);
+}
+const rings = [
+  { mesh: makeRing(2.4, 0x00d4ff, 0.7), axis: new THREE.Vector3(0.2, 1, 0.1).normalize(), speed: 0.3 },
+  { mesh: makeRing(2.9, 0xff8c2a, 0.55), axis: new THREE.Vector3(1, 0.3, 0.4).normalize(), speed: -0.45 },
+  { mesh: makeRing(3.5, 0x00d4ff, 0.35), axis: new THREE.Vector3(0.5, 0.2, 1).normalize(), speed: 0.18 },
 ];
-const TEXT_NODES = Array.from({ length: 16 }, (_, i) => ({
-  text: TELEMETRY_LINES[i % TELEMETRY_LINES.length],
-  angle: Math.random() * Math.PI * 2,
-  radius: 0.9 + Math.random() * 0.7,
-  drift: 0.00006 + Math.random() * 0.0001,
-  alphaPhase: Math.random() * Math.PI * 2,
-}));
+rings.forEach(r => scene.add(r.mesh));
 
-function rotateY(p, a) { const c=Math.cos(a),s=Math.sin(a); return { x:p.x*c-p.z*s, y:p.y, z:p.x*s+p.z*c }; }
-function rotateX(p, a) { const c=Math.cos(a),s=Math.sin(a); return { x:p.x, y:p.y*c-p.z*s, z:p.y*s+p.z*c }; }
-
-let t0 = performance.now();
-function frame(now) {
-  const dt = now - t0;
-  ctx.clearRect(0, 0, W, H);
-
-  // ease intensity toward target
-  let targetIntensity = 0.15;
-  if (STATE.mode === 'listening') targetIntensity = 0.55 + STATE.pulse * 0.45;
-  else if (STATE.mode === 'thinking') targetIntensity = 0.85;
-  else if (STATE.mode === 'speaking') targetIntensity = 0.7 + STATE.pulse * 0.6;
-  STATE.intensity += (targetIntensity - STATE.intensity) * 0.08;
-
-  // base rotation; spin faster while thinking, much faster while diving
-  let spinY = 0.00045;
-  if (STATE.mode === 'thinking') spinY = 0.0028;
-  else if (STATE.mode === 'speaking') spinY = 0.0011;
-  else if (STATE.mode === 'diving') spinY = 0.006;
-  STATE.rotationY += spinY;
-  STATE.rotationX = Math.sin(dt * 0.0004) * 0.28;
-
-  // diving = scale up the whole scene
-  let scale = 1;
-  if (STATE.mode === 'diving') {
-    STATE.diveProgress = Math.min(1, STATE.diveProgress + 0.025);
-    scale = 1 + STATE.diveProgress * 2.2;
+// ----- Tick marks on inner ring -----
+function makeTickRing(radius, count, color, opacity) {
+  const segs = count * 2;
+  const pos = new Float32Array(segs * 2 * 3);
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2;
+    const major = i % 5 === 0;
+    const inner = radius;
+    const outer = radius + (major ? 0.14 : 0.06);
+    pos[i*6]   = Math.cos(a) * inner; pos[i*6+1] = 0; pos[i*6+2] = Math.sin(a) * inner;
+    pos[i*6+3] = Math.cos(a) * outer; pos[i*6+4] = 0; pos[i*6+5] = Math.sin(a) * outer;
   }
-
-  const breathe = 1 + 0.045 * Math.sin(dt * 0.0018) + STATE.intensity * 0.06;
-  const R = BASE_R * breathe * scale;
-
-  // ----- background ambient haze -----
-  ctx.globalCompositeOperation = 'lighter';
-  const haze = ctx.createRadialGradient(CX, CY, 0, CX, CY, R * 4);
-  haze.addColorStop(0, `rgba(0,212,255,${0.18 + STATE.intensity * 0.15})`);
-  haze.addColorStop(0.35, `rgba(0,140,200,${0.05 + STATE.intensity * 0.08})`);
-  haze.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, 0, W, H);
-
-  // ----- concentric HUD rings (3 layers) -----
-  const rings = [
-    { r: R * 1.55, w: 1.2, color: 'rgba(0,212,255,0.7)', spin: 0.00035, ticks: 60 },
-    { r: R * 1.95, w: 1.0, color: 'rgba(255,140,42,0.55)', spin: -0.0002, ticks: 36 },
-    { r: R * 2.5,  w: 0.8, color: 'rgba(0,212,255,0.45)', spin: 0.00015, ticks: 90 },
-  ];
-  rings.forEach((ring, idx) => {
-    const rr = ring.r;
-    ctx.strokeStyle = ring.color;
-    ctx.lineWidth = ring.w * DPR;
-    ctx.beginPath();
-    ctx.arc(CX, CY, rr, 0, Math.PI * 2);
-    ctx.stroke();
-    // ticks
-    const tickRot = dt * ring.spin;
-    for (let i = 0; i < ring.ticks; i++) {
-      const a = (i / ring.ticks) * Math.PI * 2 + tickRot;
-      const isMajor = i % 5 === 0;
-      const r1 = rr;
-      const r2 = rr + (isMajor ? 12 : 5) * DPR;
-      ctx.strokeStyle = isMajor ? ring.color : ring.color.replace(/[\d.]+\)$/, m => (parseFloat(m) * 0.5) + ')');
-      ctx.lineWidth = (isMajor ? 1.2 : 0.6) * DPR;
-      ctx.beginPath();
-      ctx.moveTo(CX + Math.cos(a) * r1, CY + Math.sin(a) * r1);
-      ctx.lineTo(CX + Math.cos(a) * r2, CY + Math.sin(a) * r2);
-      ctx.stroke();
-    }
-    // markers (rotating dots)
-    for (let i = 0; i < 3; i++) {
-      const a = tickRot * (idx + 1.4) + i * Math.PI * 2 / 3;
-      const x = CX + Math.cos(a) * rr;
-      const y = CY + Math.sin(a) * rr;
-      ctx.beginPath();
-      ctx.fillStyle = idx === 1 ? `rgba(255,170,80,${0.6 + STATE.intensity * 0.4})` : `rgba(128,240,255,${0.7 + STATE.intensity * 0.3})`;
-      ctx.arc(x, y, (3 + STATE.intensity * 3) * DPR, 0, Math.PI * 2);
-      ctx.fill();
-    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const m = new THREE.LineBasicMaterial({
+    color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false,
   });
-
-  // ----- inner blobs (organic core feel) -----
-  INNER_BLOBS.forEach(b => {
-    b.angle += b.speed;
-    const wob = 1 + 0.4 * Math.sin(dt * 0.001 + b.phase) + STATE.intensity * 0.5;
-    const x = CX + Math.cos(b.angle) * R * b.r * 0.85;
-    const y = CY + Math.sin(b.angle) * R * b.r * 0.85;
-    const orange = STATE.mode === 'thinking' || STATE.mode === 'speaking' ? 1 : 0.4;
-    const cb = ctx.createRadialGradient(x, y, 0, x, y, b.size * 14 * DPR * wob);
-    cb.addColorStop(0, `rgba(255,170,80,${orange * 0.35 * (0.4 + STATE.intensity)})`);
-    cb.addColorStop(0.4, `rgba(0,180,240,${0.25 * (0.4 + STATE.intensity)})`);
-    cb.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = cb;
-    ctx.fillRect(x - b.size * 14 * DPR * wob, y - b.size * 14 * DPR * wob, b.size * 28 * DPR * wob, b.size * 28 * DPR * wob);
-  });
-
-  // ----- particle sphere -----
-  for (let i = 0; i < CORE_PTS.length; i++) {
-    let p = CORE_PTS[i];
-    let q = rotateY(p, STATE.rotationY);
-    q = rotateX(q, STATE.rotationX);
-    const depth = (q.z + 1) / 2;
-    // jitter from intensity
-    const jx = Math.sin(dt * 0.002 + p.jitter) * STATE.intensity * 4 * DPR;
-    const jy = Math.cos(dt * 0.002 + p.jitter) * STATE.intensity * 4 * DPR;
-    const x = CX + q.x * R + jx;
-    const y = CY + q.y * R + jy;
-    let alpha = (0.2 + 0.75 * depth) * (0.7 + STATE.intensity * 0.5);
-    let size = (0.7 + 1.6 * depth) * DPR;
-
-    // accent particles → orange tint, especially when active
-    let r, g, b;
-    if (p.orangeBias && (STATE.mode === 'thinking' || STATE.mode === 'speaking' || STATE.intensity > 0.4)) {
-      r = 255; g = 170; b = 80;
-      size *= 1.4;
-      alpha *= 1.1;
-    } else {
-      r = 128; g = 240; b = 255;
-    }
-    // bloom halo
-    ctx.beginPath();
-    ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.18})`;
-    ctx.arc(x, y, size * 3.4, 0, Math.PI * 2);
-    ctx.fill();
-    // core
-    ctx.beginPath();
-    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
-    ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // ----- energy filaments (when thinking/speaking) -----
-  if (STATE.intensity > 0.35) {
-    ctx.globalCompositeOperation = 'lighter';
-    const filaments = 14;
-    for (let i = 0; i < filaments; i++) {
-      const a = (i / filaments) * Math.PI * 2 + dt * 0.0008;
-      const r1 = R * 0.4;
-      const r2 = R * (1.2 + STATE.intensity * 0.6);
-      const grad = ctx.createLinearGradient(
-        CX + Math.cos(a) * r1, CY + Math.sin(a) * r1,
-        CX + Math.cos(a) * r2, CY + Math.sin(a) * r2,
-      );
-      grad.addColorStop(0, `rgba(255,170,80,${STATE.intensity * 0.7})`);
-      grad.addColorStop(1, 'rgba(0,180,240,0)');
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 1.5 * DPR;
-      ctx.beginPath();
-      ctx.moveTo(CX + Math.cos(a) * r1, CY + Math.sin(a) * r1);
-      ctx.lineTo(CX + Math.cos(a) * r2, CY + Math.sin(a) * r2);
-      ctx.stroke();
-    }
-  }
-
-  // ----- telemetry text floating around -----
-  ctx.font = `${9 * DPR}px "JetBrains Mono", monospace`;
-  ctx.textAlign = 'left';
-  TEXT_NODES.forEach(node => {
-    node.angle += node.drift;
-    const a = node.angle;
-    const r = R * node.radius;
-    const x = CX + Math.cos(a) * r;
-    const y = CY + Math.sin(a) * r;
-    const alpha = 0.35 + 0.25 * Math.sin(dt * 0.0008 + node.alphaPhase);
-    ctx.fillStyle = `rgba(128,240,255,${alpha})`;
-    ctx.fillText(node.text, x, y);
-  });
-
-  ctx.globalCompositeOperation = 'source-over';
-  requestAnimationFrame(frame);
+  return new THREE.LineSegments(g, m);
 }
-requestAnimationFrame(frame);
+const ticks = makeTickRing(2.42, 60, 0x80f0ff, 0.6);
+scene.add(ticks);
+
+// ----- Central glow sphere (becomes a soft blob via bloom) -----
+const glowGeom = new THREE.IcosahedronGeometry(0.4, 4);
+const glowMat = new THREE.MeshBasicMaterial({
+  color: 0xb8f8ff, transparent: true, opacity: 0.25,
+  blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const glow = new THREE.Mesh(glowGeom, glowMat);
+scene.add(glow);
+
+// ----- Energy filaments (radial lines for thinking/speaking) -----
+const N_FILAMENTS = 24;
+const filamentGeom = new THREE.BufferGeometry();
+const filamentPos = new Float32Array(N_FILAMENTS * 2 * 3);
+const filamentCol = new Float32Array(N_FILAMENTS * 2 * 3);
+for (let i = 0; i < N_FILAMENTS; i++) {
+  const phi = Math.acos(2 * Math.random() - 1);
+  const theta = Math.random() * Math.PI * 2;
+  const x = Math.sin(phi) * Math.cos(theta);
+  const y = Math.cos(phi);
+  const z = Math.sin(phi) * Math.sin(theta);
+  filamentPos[i*6]   = x * 0.4; filamentPos[i*6+1] = y * 0.4; filamentPos[i*6+2] = z * 0.4;
+  filamentPos[i*6+3] = x * 2.6; filamentPos[i*6+4] = y * 2.6; filamentPos[i*6+5] = z * 2.6;
+  // gradient cyan -> orange
+  filamentCol[i*6]   = COLOR_AMBER.r;  filamentCol[i*6+1] = COLOR_AMBER.g;  filamentCol[i*6+2] = COLOR_AMBER.b;
+  filamentCol[i*6+3] = COLOR_AZURE.r;  filamentCol[i*6+4] = COLOR_AZURE.g;  filamentCol[i*6+5] = COLOR_AZURE.b;
+}
+filamentGeom.setAttribute('position', new THREE.BufferAttribute(filamentPos, 3));
+filamentGeom.setAttribute('color', new THREE.BufferAttribute(filamentCol, 3));
+const filamentMat = new THREE.LineBasicMaterial({
+  vertexColors: true, transparent: true, opacity: 0,
+  blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const filaments = new THREE.LineSegments(filamentGeom, filamentMat);
+scene.add(filaments);
+
+// ============================================================
+// POST-PROCESSING — bloom, scanlines, glitch
+// ============================================================
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  1.2,   // strength
+  0.7,   // radius
+  0.1,   // threshold
+);
+composer.addPass(bloomPass);
+const filmPass = new FilmPass(0.20, false);
+composer.addPass(filmPass);
+composer.addPass(new OutputPass());
+
+// ============================================================
+// Resize
+// ============================================================
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  bloomPass.setSize(w, h);
+});
+
+// ============================================================
+// Animation loop
+// ============================================================
+const clock = new THREE.Clock();
+function animate() {
+  const dt = clock.getDelta();
+  const t = clock.getElapsedTime();
+
+  // Ease intensity toward state target
+  let target = 0.15;
+  if (STATE.mode === 'listening') target = 0.55 + STATE.pulse * 0.45;
+  else if (STATE.mode === 'thinking') target = 0.85;
+  else if (STATE.mode === 'speaking') target = 0.7 + STATE.pulse * 0.55;
+  else if (STATE.mode === 'diving') target = 1.0;
+  STATE.intensity += (target - STATE.intensity) * 0.08;
+
+  // Bloom strength reacts to state intensity
+  bloomPass.strength = 1.1 + STATE.intensity * 1.6;
+
+  // Sphere rotation
+  let spinY = 0.0018;
+  if (STATE.mode === 'thinking') spinY = 0.014;
+  else if (STATE.mode === 'speaking') spinY = 0.006 + STATE.pulse * 0.005;
+  else if (STATE.mode === 'diving') spinY = 0.03;
+  corePoints.rotation.y += spinY;
+  corePoints.rotation.x = Math.sin(t * 0.25) * 0.15;
+  nucleus.rotation.y -= spinY * 1.5;
+  nucleus.rotation.z += spinY * 0.4;
+
+  // Breathing scale (core + nucleus)
+  const breathe = 1 + 0.04 * Math.sin(t * 1.6) + STATE.intensity * 0.08 + STATE.pulse * 0.12;
+  corePoints.scale.setScalar(breathe);
+  nucleus.scale.setScalar(0.85 + STATE.intensity * 0.35 + STATE.pulse * 0.25);
+  glow.scale.setScalar(1 + STATE.intensity * 0.6 + STATE.pulse * 0.3);
+  glow.material.opacity = 0.2 + STATE.intensity * 0.45;
+
+  // Halo slow drift
+  halo.rotation.y += 0.0003;
+  halo.rotation.x += 0.00015;
+
+  // Rings — each tilted on its own axis
+  rings.forEach((r, i) => {
+    r.mesh.rotateOnAxis(r.axis, r.speed * dt);
+  });
+  ticks.rotation.y += 0.002;
+
+  // Filaments fade in with intensity (thinking/speaking)
+  filamentMat.opacity = Math.max(0, (STATE.intensity - 0.35) * 1.2);
+  filaments.rotation.y -= 0.004;
+
+  // Camera — gentle drift idle, dive when target chosen
+  if (STATE.mode === 'diving' && STATE.diveTarget) {
+    STATE.diveProgress = Math.min(1, STATE.diveProgress + 0.025);
+    camera.position.z = 5 - STATE.diveProgress * 3.2;
+    camera.position.x += (STATE.diveTarget.x - camera.position.x) * 0.12;
+    camera.position.y += (STATE.diveTarget.y - camera.position.y) * 0.12;
+  } else {
+    const targetX = Math.sin(t * 0.18) * 0.2;
+    const targetY = Math.cos(t * 0.12) * 0.12;
+    camera.position.x += (targetX - camera.position.x) * 0.05;
+    camera.position.y += (targetY - camera.position.y) * 0.05;
+    camera.position.z += (5 - camera.position.z) * 0.05;
+  }
+  camera.lookAt(0, 0, 0);
+
+  composer.render(dt);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
 
 // ============================================================
 // VOICE: speech recognition + synthesis
@@ -842,12 +958,15 @@ micBtn.addEventListener('click', () => {
     return;
   }
   if (micActive) {
+    sfx('close');
     micActive = false;
     micBtn.classList.remove('listening');
     try { recognition.stop(); } catch (_) {}
   } else {
+    sfx('open');
     micActive = true;
     micBtn.classList.add('listening');
+    startMicAnalyser();  // wire real audio amplitude → STATE.pulse
     try { recognition.start(); } catch (_) {}
   }
 });
@@ -1001,6 +1120,7 @@ async function callClaude(node, history) {
 // SITREP
 // ============================================================
 document.getElementById('sitrepBtn').addEventListener('click', () => {
+  sfx('dive');
   handleUserSpeech(
     'JARVIS, дай короткий устный SITREP по семи планетам Farrukh: HEALTH, FINANCE, PRODUCT, MARKETING, FAMILY, LEARNING, VENTURES. ' +
     'По 5-7 секунд на каждую максимум. Заверши главным приоритетом дня. Говори как лайв-репортаж.'
@@ -1010,19 +1130,28 @@ document.getElementById('sitrepBtn').addEventListener('click', () => {
 // ============================================================
 // Satellite click → DIVE animation → open chat
 // ============================================================
+const DIVE_OFFSETS = {
+  'sat-1': { x: -1.5, y:  1.0 },  // top-left
+  'sat-2': { x:  1.5, y:  1.0 },  // top-right
+  'sat-3': { x: -1.5, y: -1.0 },  // bottom-left
+  'sat-4': { x:  1.5, y: -1.0 },  // bottom-right
+};
 document.querySelectorAll('.satellite').forEach(el => {
   el.addEventListener('click', () => {
     const key = el.getAttribute('data-node');
     const node = PLANET_NODES[key];
     if (!node) return;
-    STATE.diveTarget = key;
+    sfx('dive');
+    const satClass = [...el.classList].find(c => c.startsWith('sat-'));
+    STATE.diveTarget = DIVE_OFFSETS[satClass] || { x: 0, y: 0 };
     STATE.diveProgress = 0;
     setState('diving');
     setTimeout(() => {
       openPanel(key, node);
-      // reset dive
       STATE.diveProgress = 0;
+      STATE.diveTarget = null;
       setState('idle');
+      sfx('blip');
     }, 700);
   });
 });
@@ -1050,11 +1179,12 @@ function openPanel(key, node, autoQuery) {
     h.forEach(m => addMsg(m.role === 'user' ? 'user' : 'bot', m.content));
   }
   panel.classList.add('open');
+  sfx('open');
   setTimeout(() => inputEl.focus(), 350);
   if (autoQuery) { inputEl.value = autoQuery; setTimeout(send, 200); }
 }
-document.getElementById('closeBtn').addEventListener('click', () => panel.classList.remove('open'));
-document.getElementById('textBtn').addEventListener('click', () => openPanel('jarvis', JARVIS_NODE));
+document.getElementById('closeBtn').addEventListener('click', () => { sfx('close'); panel.classList.remove('open'); });
+document.getElementById('textBtn').addEventListener('click', () => { sfx('open'); openPanel('jarvis', JARVIS_NODE); });
 
 function addMsg(kind, text) {
   const el = document.createElement('div');
@@ -1068,6 +1198,7 @@ function addMsg(kind, text) {
 async function send() {
   const txt = inputEl.value.trim();
   if (!txt || !activeNode) return;
+  sfx('blip');
   inputEl.value = '';
   addMsg('user', txt);
   const hist = HIST[activeNode.key] = HIST[activeNode.key] || [];
@@ -1118,7 +1249,8 @@ document.getElementById('saveKey').addEventListener('click', () => {
 // ============================================================
 setTimeout(() => {
   document.getElementById('boot').classList.add('gone');
-  setTimeout(() => speak('At your service, sir.'), 600);
+  sfx('thunk');
+  setTimeout(() => { sfx('blip'); speak('At your service, sir.'); }, 700);
 }, 3200);
 </script>
 </body>

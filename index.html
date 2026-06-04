@@ -458,7 +458,7 @@
 <div class="boot" id="boot">
   <div class="b-title">J.A.R.V.I.S</div>
   <div class="b-line d1">▸ Initializing core systems<span class="ok"> · OK</span></div>
-  <div class="b-line d2">▸ Loading Claude Opus 4.8<span class="ok"> · OK</span></div>
+  <div class="b-line d2">▸ Loading Claude Sonnet 4.6<span class="ok"> · OK</span></div>
   <div class="b-line d3">▸ Voice synthesis online<span class="ok"> · OK</span></div>
   <div class="b-line d4">▸ Connecting 7 planets<span class="ok"> · OK</span></div>
   <div class="b-line d5">▸ At your service, sir<span class="ok"> · ✓</span></div>
@@ -481,14 +481,14 @@
 
 <!-- BOTTOM HUD -->
 <div class="hud-bottom">
-  <div>SYS <span class="ok">●</span> ONLINE · OPUS 4.8 <span class="blink">▮</span></div>
+  <div>SYS <span class="ok">●</span> ONLINE · SONNET 4.6 <span class="blink">▮</span></div>
   <div id="latency">LATENCY 38ms · ALL OPERATIONAL</div>
 </div>
 
 <!-- STATE BADGE + JARVIS LOGO -->
 <div class="state-badge" id="stateBadge" data-state="idle">▮ STANDBY</div>
 <div class="jarvis-label">
-  <div class="glyph">JARVIS<small>Claude Opus 4.8</small></div>
+  <div class="glyph">JARVIS<small>Claude Sonnet 4.6</small></div>
 </div>
 
 <!-- 4 SATELLITES (planet groups) -->
@@ -514,7 +514,7 @@
     <div class="name">CHANNEL: <b id="pName">JARVIS</b></div>
     <button class="close" id="closeBtn">✕</button>
   </div>
-  <div class="channel-info" id="pInfo">Chief Orchestrator · Claude Opus 4.8</div>
+  <div class="channel-info" id="pInfo">Chief Orchestrator · Claude Sonnet 4.6</div>
   <div class="msgs" id="msgs"></div>
   <div class="composer">
     <textarea id="input" placeholder="> address Jarvis..."></textarea>
@@ -962,6 +962,9 @@ micBtn.addEventListener('click', () => {
     micActive = false;
     micBtn.classList.remove('listening');
     try { recognition.stop(); } catch (_) {}
+    stopMicAnalyser();             // release the mic hardware
+    if (STATE.mode === 'listening') setState('idle');
+    hideTranscript();
   } else {
     // BARGE-IN: if JARVIS is currently speaking, cut him off first
     if (currentAudio || (window.speechSynthesis && speechSynthesis.speaking)) {
@@ -997,13 +1000,14 @@ let currentAudio = null;
 let speakAnalyser = null;
 let keywordRec = null;       // passive "стоп" listener during speech
 let keywordActive = false;
-const STOP_WORDS = /\b(стоп|остан|молч|stop|silence|quiet)\b/i;
-
+// During TTS playback we passively listen for ANY recognizable speech.
+// If we hear something meaningful (3+ chars of recognized text), barge-in
+// fires and cancels Jarvis so the user's input takes priority.
 function startKeywordListener() {
   if (keywordActive) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
-  if (micActive) return;  // mic already in use for user input
+  if (micActive) return;  // mic already in use for user input — don't compete
   try {
     keywordRec = new SR();
     keywordRec.continuous = true;
@@ -1011,8 +1015,9 @@ function startKeywordListener() {
     keywordRec.lang = 'ru-RU';
     keywordRec.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript || '';
-        if (STOP_WORDS.test(t)) {
+        const t = (e.results[i][0].transcript || '').trim();
+        // Any recognised utterance ≥3 chars cancels Jarvis — full barge-in
+        if (t.length >= 3) {
           sfx('blip');
           cancelSpeech();
           break;
@@ -1067,6 +1072,8 @@ async function speak(text) {
     blobUrl = URL.createObjectURL(blob);
     const audio = new Audio(blobUrl);
     audio.crossOrigin = 'anonymous';
+    audio.playbackRate = 1.08;       // slightly snappier delivery
+    audio.preservesPitch = true;     // keep voice timbre intact
     currentAudio = audio;
 
     // Wire audio amplitude → STATE.pulse for sphere reactivity
@@ -1143,18 +1150,22 @@ function hideTranscript() {
 }
 
 // ----- microphone volume monitoring for visual pulse -----
-let audioCtx = null, micAnalyser = null;
+let audioCtx = null, micAnalyser = null, micStream = null, micTickRunning = false;
 async function startMicAnalyser() {
   if (!navigator.mediaDevices) return;
+  if (micStream) return; // already running
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = audioCtx.createMediaStreamSource(stream);
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = ac();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const src = audioCtx.createMediaStreamSource(micStream);
     micAnalyser = audioCtx.createAnalyser();
     micAnalyser.fftSize = 256;
     src.connect(micAnalyser);
     const buf = new Uint8Array(micAnalyser.frequencyBinCount);
+    micTickRunning = true;
     const tick = () => {
+      if (!micTickRunning || !micAnalyser) return;
       micAnalyser.getByteFrequencyData(buf);
       const sum = buf.reduce((s, v) => s + v, 0);
       const avg = sum / buf.length / 255;
@@ -1167,13 +1178,24 @@ async function startMicAnalyser() {
   }
 }
 
+function stopMicAnalyser() {
+  micTickRunning = false;
+  STATE.pulse = 0;
+  try { micAnalyser && micAnalyser.disconnect(); } catch (_) {}
+  micAnalyser = null;
+  if (micStream) {
+    micStream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+    micStream = null;
+  }
+}
+
 // ============================================================
 // JARVIS conversation
 // ============================================================
 const JARVIS_NODE = {
   name: 'JARVIS',
-  desc: 'Chief Orchestrator · Claude Opus 4.8 · with hands',
-  model: 'claude-opus-4-8',
+  desc: 'Chief Orchestrator · Claude Sonnet 4.6 · with hands',
+  model: 'claude-sonnet-4-6',
   agent: true,
   system: `Ты — JARVIS (Just A Rather Very Intelligent System), персональный AI-дворецкий Farrukh Рахимова. Стиль как у Тони Старка из Iron Man: уважительный, остроумный, краткий, проактивный. Обращайся "сэр" или "Farrukh".
 
@@ -1347,7 +1369,7 @@ function openPanel(key, node, autoQuery) {
   msgsEl.innerHTML = '';
   const h = HIST[key] || [];
   if (h.length === 0) {
-    addMsg('sys', key === 'jarvis' ? '▮ JARVIS ONLINE · OPUS 4.8' : `CHANNEL OPEN — ${node.name}`);
+    addMsg('sys', key === 'jarvis' ? '▮ JARVIS ONLINE · SONNET 4.6' : `CHANNEL OPEN — ${node.name}`);
   } else {
     h.forEach(m => addMsg(m.role === 'user' ? 'user' : 'bot', m.content));
   }

@@ -846,16 +846,16 @@ function animate() {
   const dt = clock.getDelta();
   const t = clock.getElapsedTime();
 
-  // Ease intensity toward state target
-  let target = 0.15;
-  if (STATE.mode === 'listening') target = 0.55 + STATE.pulse * 0.45;
-  else if (STATE.mode === 'thinking') target = 0.85;
-  else if (STATE.mode === 'speaking') target = 0.7 + STATE.pulse * 0.55;
-  else if (STATE.mode === 'diving') target = 1.0;
-  STATE.intensity += (target - STATE.intensity) * 0.08;
+  // Ease intensity toward state target — calmer baseline, only reacts to real audio
+  let target = 0.05;  // very subtle idle glow
+  if (STATE.mode === 'listening') target = 0.20 + STATE.pulse * 0.7;  // pure mic-amplitude driven
+  else if (STATE.mode === 'thinking') target = 0.45;  // moderate glow while processing
+  else if (STATE.mode === 'speaking') target = 0.30 + STATE.pulse * 0.7;  // driven by TTS audio amplitude
+  else if (STATE.mode === 'diving') target = 0.80;
+  STATE.intensity += (target - STATE.intensity) * 0.06;
 
-  // Bloom strength reacts to state intensity
-  bloomPass.strength = 1.1 + STATE.intensity * 1.6;
+  // Bloom strength: much lower baseline, reactive ceiling
+  bloomPass.strength = 0.45 + STATE.intensity * 1.1;
 
   // Sphere rotation
   let spinY = 0.0018;
@@ -867,12 +867,12 @@ function animate() {
   nucleus.rotation.y -= spinY * 1.5;
   nucleus.rotation.z += spinY * 0.4;
 
-  // Breathing scale (core + nucleus)
-  const breathe = 1 + 0.04 * Math.sin(t * 1.6) + STATE.intensity * 0.08 + STATE.pulse * 0.12;
+  // Breathing scale (core + nucleus) — much gentler, slower
+  const breathe = 1 + 0.018 * Math.sin(t * 0.7) + STATE.intensity * 0.04 + STATE.pulse * 0.08;
   corePoints.scale.setScalar(breathe);
-  nucleus.scale.setScalar(0.85 + STATE.intensity * 0.35 + STATE.pulse * 0.25);
-  glow.scale.setScalar(1 + STATE.intensity * 0.6 + STATE.pulse * 0.3);
-  glow.material.opacity = 0.2 + STATE.intensity * 0.45;
+  nucleus.scale.setScalar(0.65 + STATE.intensity * 0.20 + STATE.pulse * 0.18);
+  glow.scale.setScalar(0.8 + STATE.intensity * 0.35 + STATE.pulse * 0.2);
+  glow.material.opacity = 0.06 + STATE.intensity * 0.22;
 
   // Halo slow drift
   halo.rotation.y += 0.0003;
@@ -963,6 +963,10 @@ micBtn.addEventListener('click', () => {
     micBtn.classList.remove('listening');
     try { recognition.stop(); } catch (_) {}
   } else {
+    // BARGE-IN: if JARVIS is currently speaking, cut him off first
+    if (currentAudio || (window.speechSynthesis && speechSynthesis.speaking)) {
+      cancelSpeech();
+    }
     sfx('open');
     micActive = true;
     micBtn.classList.add('listening');
@@ -988,25 +992,145 @@ if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = pickVoice;
 }
 
-function speak(text) {
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  if (chosenVoice) u.voice = chosenVoice;
-  u.rate = 1.05; u.pitch = 0.85; u.volume = 1;
-  setState('speaking');
-  // fake amplitude pulse — speech API doesn't expose volume, so simulate
-  let speakingPulse = setInterval(() => {
-    STATE.pulse = Math.random() * 0.8 + 0.2;
-  }, 70);
-  u.onend = () => {
-    clearInterval(speakingPulse);
-    STATE.pulse = 0;
-    setState('idle');
-    setTimeout(hideTranscript, 1500);
-  };
+// ----- ElevenLabs TTS via proxy -----
+let currentAudio = null;
+let speakAnalyser = null;
+let keywordRec = null;       // passive "стоп" listener during speech
+let keywordActive = false;
+const STOP_WORDS = /\b(стоп|остан|молч|stop|silence|quiet)\b/i;
+
+function startKeywordListener() {
+  if (keywordActive) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  if (micActive) return;  // mic already in use for user input
+  try {
+    keywordRec = new SR();
+    keywordRec.continuous = true;
+    keywordRec.interimResults = true;
+    keywordRec.lang = 'ru-RU';
+    keywordRec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript || '';
+        if (STOP_WORDS.test(t)) {
+          sfx('blip');
+          cancelSpeech();
+          break;
+        }
+      }
+    };
+    keywordRec.onerror = () => { /* swallow */ };
+    keywordRec.onend = () => { if (keywordActive) { try { keywordRec.start(); } catch (_) {} } };
+    keywordActive = true;
+    keywordRec.start();
+  } catch (_) { keywordActive = false; }
+}
+function stopKeywordListener() {
+  keywordActive = false;
+  if (keywordRec) { try { keywordRec.stop(); } catch (_) {} keywordRec = null; }
+}
+
+function cancelSpeech() {
+  if (currentAudio) {
+    try { currentAudio.pause(); currentAudio.src = ''; } catch (_) {}
+    currentAudio = null;
+  }
+  if ('speechSynthesis' in window) {
+    try { speechSynthesis.cancel(); } catch (_) {}
+  }
+  stopKeywordListener();
+  STATE.pulse = 0;
+  if (STATE.mode === 'speaking') setState('idle');
+  hideTranscript();
+}
+window.cancelSpeech = cancelSpeech;
+
+async function speak(text) {
+  cancelSpeech();
   showTranscript('jarvis-text', text);
-  speechSynthesis.speak(u);
+  setState('speaking');
+
+  const SUPA_KEY = 'sb_publishable_RgOAI7MLVztrdNVihUO3VQ_NUtSHWU7';
+  let blobUrl = null;
+  try {
+    const res = await fetch('https://umtyhyaeerkmofqmzvwr.supabase.co/functions/v1/jarvis?tts=1', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+      },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error('TTS HTTP ' + res.status);
+    const blob = await res.blob();
+    blobUrl = URL.createObjectURL(blob);
+    const audio = new Audio(blobUrl);
+    audio.crossOrigin = 'anonymous';
+    currentAudio = audio;
+
+    // Wire audio amplitude → STATE.pulse for sphere reactivity
+    try {
+      const a = ac();
+      if (a.state === 'suspended') await a.resume();
+      const src = a.createMediaElementSource(audio);
+      const an = a.createAnalyser();
+      an.fftSize = 256;
+      an.smoothingTimeConstant = 0.8;
+      src.connect(an);
+      src.connect(a.destination);
+      speakAnalyser = an;
+      const buf = new Uint8Array(an.frequencyBinCount);
+      const tick = () => {
+        if (!currentAudio || audio.paused || audio.ended) return;
+        an.getByteFrequencyData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i];
+        STATE.pulse = Math.min(1, (sum / buf.length / 255) * 2.5);
+        requestAnimationFrame(tick);
+      };
+      audio.addEventListener('playing', () => { requestAnimationFrame(tick); startKeywordListener(); }, { once: true });
+    } catch (e) {
+      console.warn('audio analyser failed', e);
+    }
+
+    audio.addEventListener('ended', () => {
+      currentAudio = null;
+      stopKeywordListener();
+      STATE.pulse = 0;
+      setState('idle');
+      setTimeout(hideTranscript, 1500);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    });
+    audio.addEventListener('error', () => {
+      currentAudio = null;
+      stopKeywordListener();
+      STATE.pulse = 0;
+      setState('idle');
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    });
+    await audio.play();
+  } catch (err) {
+    console.warn('ElevenLabs TTS failed, falling back to system voice', err);
+    currentAudio = null;
+    // Fallback to native speechSynthesis
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(text);
+      if (chosenVoice) u.voice = chosenVoice;
+      u.rate = 1.0; u.pitch = 1.0;
+      const fakePulse = setInterval(() => { STATE.pulse = Math.random() * 0.5 + 0.15; }, 80);
+      u.onend = () => {
+        clearInterval(fakePulse);
+        STATE.pulse = 0;
+        setState('idle');
+        setTimeout(hideTranscript, 1500);
+      };
+      speechSynthesis.speak(u);
+    } else {
+      STATE.pulse = 0;
+      setState('idle');
+    }
+  }
 }
 
 const transcriptEl = document.getElementById('transcript');

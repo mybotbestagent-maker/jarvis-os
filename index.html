@@ -686,7 +686,7 @@ for (let i = 0; i < N_CORE; i++) {
 const coreGeom = new THREE.BufferGeometry();
 coreGeom.setAttribute('position', new THREE.BufferAttribute(corePos, 3));
 coreGeom.setAttribute('color', new THREE.BufferAttribute(coreCol, 3));
-const coreMat = pointMaterial({ size: 0.07, opacity: 0.95 });
+const coreMat = pointMaterial({ size: 0.055, opacity: 0.65 });
 const corePoints = new THREE.Points(coreGeom, coreMat);
 scene.add(corePoints);
 
@@ -702,12 +702,12 @@ for (let i = 0; i < N_NUCLEUS; i++) {
   nucPos[i*3+1] = r * Math.cos(phi);
   nucPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
   const c = Math.random() < 0.3 ? COLOR_AMBER : COLOR_CYAN;
-  nucCol[i*3] = c.r * 1.3; nucCol[i*3+1] = c.g * 1.3; nucCol[i*3+2] = c.b * 1.3;
+  nucCol[i*3] = c.r * 0.7; nucCol[i*3+1] = c.g * 0.7; nucCol[i*3+2] = c.b * 0.7;
 }
 const nucGeom = new THREE.BufferGeometry();
 nucGeom.setAttribute('position', new THREE.BufferAttribute(nucPos, 3));
 nucGeom.setAttribute('color', new THREE.BufferAttribute(nucCol, 3));
-const nucMat = pointMaterial({ size: 0.12, opacity: 0.7 });
+const nucMat = pointMaterial({ size: 0.085, opacity: 0.4 });
 const nucleus = new THREE.Points(nucGeom, nucMat);
 scene.add(nucleus);
 
@@ -775,9 +775,9 @@ const ticks = makeTickRing(2.42, 60, 0x80f0ff, 0.6);
 scene.add(ticks);
 
 // ----- Central glow sphere (becomes a soft blob via bloom) -----
-const glowGeom = new THREE.IcosahedronGeometry(0.4, 4);
+const glowGeom = new THREE.IcosahedronGeometry(0.32, 4);
 const glowMat = new THREE.MeshBasicMaterial({
-  color: 0xb8f8ff, transparent: true, opacity: 0.25,
+  color: 0x60c8e0, transparent: true, opacity: 0.08,
   blending: THREE.AdditiveBlending, depthWrite: false,
 });
 const glow = new THREE.Mesh(glowGeom, glowMat);
@@ -817,9 +817,9 @@ composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  1.2,   // strength
-  0.7,   // radius
-  0.1,   // threshold
+  0.55,  // strength — much calmer baseline
+  0.55,  // radius
+  0.55,  // threshold — only bright cores bloom, not the whole sphere
 );
 composer.addPass(bloomPass);
 const filmPass = new FilmPass(0.20, false);
@@ -854,8 +854,8 @@ function animate() {
   else if (STATE.mode === 'diving') target = 0.80;
   STATE.intensity += (target - STATE.intensity) * 0.06;
 
-  // Bloom strength: much lower baseline, reactive ceiling
-  bloomPass.strength = 0.45 + STATE.intensity * 1.1;
+  // Bloom strength: very low baseline, reactive ceiling
+  bloomPass.strength = 0.25 + STATE.intensity * 0.7;
 
   // Sphere rotation
   let spinY = 0.0018;
@@ -870,9 +870,9 @@ function animate() {
   // Breathing scale (core + nucleus) — much gentler, slower
   const breathe = 1 + 0.018 * Math.sin(t * 0.7) + STATE.intensity * 0.04 + STATE.pulse * 0.08;
   corePoints.scale.setScalar(breathe);
-  nucleus.scale.setScalar(0.65 + STATE.intensity * 0.20 + STATE.pulse * 0.18);
-  glow.scale.setScalar(0.8 + STATE.intensity * 0.35 + STATE.pulse * 0.2);
-  glow.material.opacity = 0.06 + STATE.intensity * 0.22;
+  nucleus.scale.setScalar(0.55 + STATE.intensity * 0.15 + STATE.pulse * 0.15);
+  glow.scale.setScalar(0.7 + STATE.intensity * 0.25 + STATE.pulse * 0.15);
+  glow.material.opacity = 0.03 + STATE.intensity * 0.12;
 
   // Halo slow drift
   halo.rotation.y += 0.0003;

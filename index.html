@@ -1333,7 +1333,11 @@ async function handleUserSpeech(text) {
     }
   } catch (e) {
     setState('idle');
-    speak('Простите сэр, что-то пошло не так. ' + (e.message || ''));
+    const msg = String(e?.message || '');
+    if (/429|529|overload|rate/i.test(msg)) speak('Сэр, упёрся в лимит. Дайте секунду и повторите.');
+    else if (/401|403/.test(msg)) speak('Сэр, у меня отказ авторизации. Проверьте API-ключ.');
+    else if (/5\d\d|network|fetch/i.test(msg)) speak('Сетевая ошибка. Повторите вопрос, сэр.');
+    else speak('Простите сэр, не получилось. Повторите запрос.');
   }
 }
 
@@ -1369,6 +1373,9 @@ async function callClaude(node, history, channelKey) {
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
   if (data.error) throw new Error(data.error);
+  if (Array.isArray(data._tool_log) && data._tool_log.length) {
+    console.log('[JARVIS tool calls]', data._tool_log);
+  }
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
 }
 
@@ -1378,8 +1385,10 @@ async function callClaude(node, history, channelKey) {
 document.getElementById('sitrepBtn').addEventListener('click', () => {
   sfx('dive');
   handleUserSpeech(
-    'JARVIS, дай короткий устный SITREP по семи планетам Farrukh: HEALTH, FINANCE, PRODUCT, MARKETING, FAMILY, LEARNING, VENTURES. ' +
-    'По 5-7 секунд на каждую максимум. Заверши главным приоритетом дня. Говори как лайв-репортаж.'
+    'Дай мне SITREP. Сначала вызови recall("приоритеты") чтобы вспомнить мои текущие приоритеты. ' +
+    'Затем notion_search("NeurLead") и notion_read лучшего результата чтобы взять актуальный статус главного проекта. ' +
+    'Потом дай устный отчёт в одной фразе: статус NeurLead, 1 главный приоритет на сегодня, 1 риск. ' +
+    'Максимум 4 предложения, по-русски, без списков — это будет озвучено.'
   );
 });
 
@@ -1479,8 +1488,13 @@ async function send() {
     if (activeNode.key === 'jarvis') speak(reply);
     else setState('idle');
   } catch (e) {
-    ph.textContent = '⚠ ' + (e.message || 'error');
-    ph.style.color = '#ff7777';
+    const msg = (e.message || 'error');
+    ph.textContent = /401|403/.test(msg) ? '⚠ Авторизация. Проверь API.'
+                  : /429|529|overload|rate/i.test(msg) ? '⚠ Anthropic перегружен, попробуй ещё раз.'
+                  : /5\d\d|network|fetch/i.test(msg) ? '⚠ Сетевая ошибка. Повтори.'
+                  : '⚠ ' + msg.slice(0, 200);
+    ph.style.color = '#ff9a6a';
+    sfx('error');
     setState('idle');
   } finally {
     sendBtn.disabled = false;

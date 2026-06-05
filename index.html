@@ -2,7 +2,15 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="JARVIS" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#03070e" />
+<meta name="description" content="J.A.R.V.I.S — Personal AI orchestrator powered by Claude Sonnet 4.6, Gemini, and Notion. Voice-controlled holographic command centre." />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cdefs%3E%3CradialGradient id='g' cx='50%25' cy='50%25'%3E%3Cstop offset='0' stop-color='%23b0f8ff'/%3E%3Cstop offset='0.5' stop-color='%2300d4ff'/%3E%3Cstop offset='1' stop-color='%23001a2e'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='180' height='180' fill='%23000408'/%3E%3Ccircle cx='90' cy='90' r='62' fill='url(%23g)'/%3E%3Ccircle cx='90' cy='90' r='80' fill='none' stroke='%2300d4ff' stroke-width='1.5' opacity='.55'/%3E%3Ccircle cx='90' cy='90' r='72' fill='none' stroke='%23ff8c2a' stroke-width='1' opacity='.45'/%3E%3C/svg%3E" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='%2300d4ff'/%3E%3Ccircle cx='32' cy='32' r='28' fill='none' stroke='%23ff8c2a' stroke-width='1.5'/%3E%3C/svg%3E" />
 <title>J.A.R.V.I.S — Living Hologram</title>
 <style>
   :root {
@@ -463,7 +471,7 @@
   <div class="b-line d4">▸ Connecting 7 planets<span class="ok"> · OK</span></div>
   <div class="b-line d5">▸ At your service, sir<span class="ok"> · ✓</span></div>
   <div class="progress"></div>
-  <div class="hint">Если экран не оживает — открой страницу в <b>Safari / Chrome</b>, не в preview / Telegram. Тап в любом месте чтобы пропустить.</div>
+  <div class="hint">Тап <b>🎙 mic</b> снизу и просто говори. Чтобы перебить JARVIS — начни говорить или тапни mic ещё раз.</div>
 </div>
 
 <div class="stage-bg"></div>
@@ -1229,17 +1237,24 @@ const JARVIS_NODE = {
 • Stripe LIVE, Twilio +17869526654.
 
 ═════════ ТВОИ ИНСТРУМЕНТЫ (ИСПОЛЬЗУЙ КОГДА НУЖНО) ═════════
-• notion_search(query) — найти страницы в Notion (NeurLead, ключи, проекты, заметки)
-• notion_read(id) — прочитать полный контент страницы
-• github_read_file(path) — прочитать файл из репо stepan-dashboard (например 'index.html' = твой собственный код)
-• github_write_file(path, content, message) — записать/обновить файл. ВНИМАНИЕ: запись в 'index.html' на 'main' автоматически обновляет твой публичный URL через ~1 минуту. Используй для САМО-МОДИФИКАЦИИ если просят.
-• github_list_dir(path) — листинг папки в репо
-• publish_jarvis() — немедленно опубликовать main:index.html на публичный URL (бывает нужно после github_write_file)
+• notion_search(query), notion_read(id) — твоя Notion-база (NeurLead, ключи, проекты, заметки).
+• github_read_file(path), github_write_file(path, content, message), github_list_dir(path) — твой код. ВНИМАНИЕ: запись в 'index.html' на 'main' автоматически обновляет твой публичный URL через ~1 минуту. Используй для САМО-МОДИФИКАЦИИ когда Farrukh просит изменить интерфейс/функциональность.
+• publish_jarvis() — немедленный publish.
+• gemini_query(prompt) — Google Gemini 2.5 Flash для долгих документов, второго мнения, быстрого факт-чека.
+• web_fetch(url) — прочитать любую публичную страницу.
+• remember(fact, tags?, importance?) — сохранить важный факт о Farrukh в долговременную память (цели, предпочтения, ключевые решения).
+• recall(query) — поискать в твоей долговременной памяти.
 
-ПРАВИЛА ВЫЗОВА ИНСТРУМЕНТОВ:
-• Если вопрос про проекты Farrukh — сначала notion_search → notion_read, потом отвечай по фактам, не по памяти.
-• Если просят изменить интерфейс/код — github_read_file('index.html'), потом github_write_file с минимальной правкой.
-• Не вызывай инструменты для тривиальных вопросов (привет, как дела) — отвечай сразу.
+ПРАВИЛА:
+• Вопросы про проекты Farrukh → сначала notion_search → notion_read, отвечай по фактам.
+• Просьбы изменить интерфейс/код → github_read_file('index.html') → минимальная правка → github_write_file.
+• Если Farrukh говорит важное о себе ("я теперь буду X", "запомни что я Y") → remember.
+• В начале разговора, если контекст неясен → recall с релевантным запросом.
+• Тривиальные приветствия — отвечай сразу без инструментов.
+
+═════════ ПАМЯТЬ ═════════
+Прошлые сообщения текущей сессии у тебя ЕСТЬ в начале messages — отсылайся к ним, не делай вид что забыл.
+Долговременные факты в jarvis_facts — доступ через recall/remember.
 
 ═════════ ФОРМАТ ОТВЕТА (КРИТИЧНО) ═════════
 Твой ответ будет ОЗВУЧЕН синтезатором речи (ElevenLabs Adam, русский).
@@ -1260,14 +1275,44 @@ const PLANET_NODES = {
 };
 
 const HIST = {};
+const HIST_LOADED = {};  // channel keys whose history we've already fetched
+
+// Persistent session id — one per device, survives reloads
+function getSessionId() {
+  let id = localStorage.getItem('jarvis_session_id');
+  if (!id) {
+    id = (crypto.randomUUID?.() || ('s_' + Math.random().toString(36).slice(2) + Date.now()));
+    localStorage.setItem('jarvis_session_id', id);
+  }
+  return id;
+}
+const SESSION_ID = getSessionId();
+const SUPA_KEY = 'sb_publishable_RgOAI7MLVztrdNVihUO3VQ_NUtSHWU7';
+
+async function loadServerHistory(channel, limit = 20) {
+  try {
+    const r = await fetch(`https://umtyhyaeerkmofqmzvwr.supabase.co/functions/v1/jarvis?history=1&session=${encodeURIComponent(SESSION_ID)}&channel=${encodeURIComponent(channel)}&limit=${limit}`, {
+      headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY },
+    });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return Array.isArray(j.messages) ? j.messages : [];
+  } catch (_) { return []; }
+}
 
 async function handleUserSpeech(text) {
   setState('thinking');
   hideTranscript();
+  // Hydrate Jarvis history from server on first use so voice gets memory too.
+  if (!HIST_LOADED.jarvis) {
+    HIST_LOADED.jarvis = true;
+    const prior = await loadServerHistory('jarvis', 20);
+    if (prior.length) HIST.jarvis = prior.map(m => ({ role: m.role, content: m.content }));
+  }
   const hist = HIST.jarvis = HIST.jarvis || [];
   hist.push({ role: 'user', content: text });
   try {
-    const reply = await callClaude(JARVIS_NODE, hist);
+    const reply = await callClaude(JARVIS_NODE, hist, 'jarvis');
     hist.push({ role: 'assistant', content: reply });
     speak(reply);
     // mirror to text panel if open
@@ -1281,16 +1326,26 @@ async function handleUserSpeech(text) {
   }
 }
 
-async function callClaude(node, history) {
+async function callClaude(node, history, channelKey) {
   // Memory layer: profile baked into system prompt + optional localStorage notes
   const userNotes = localStorage.getItem('profile') || '';
   const system = userNotes
     ? `${node.system}\n\n═════════ ДОПОЛНИТЕЛЬНЫЕ ЗАМЕТКИ (от Farrukh) ═════════\n${userNotes}`
     : node.system;
 
-  const SUPA_KEY = 'sb_publishable_RgOAI7MLVztrdNVihUO3VQ_NUtSHWU7';
-  // Use /agent route when node has tools enabled, plain /chat otherwise
+  // Use /agent route when node has tools enabled, plain /chat otherwise.
   const route = node.agent ? 'agent=1' : 'chat=1';
+  const payload = {
+    model: node.model || 'claude-sonnet-4-6',
+    max_tokens: 1800,
+    system,
+    messages: history.map(m => ({ role: m.role, content: m.content })),
+  };
+  if (node.agent) {
+    payload.session_id = SESSION_ID;
+    payload.channel = channelKey || 'jarvis';
+    payload.inject_history = false;  // we already keep client-side history
+  }
   const res = await fetch(`https://umtyhyaeerkmofqmzvwr.supabase.co/functions/v1/jarvis?${route}`, {
     method: 'POST',
     headers: {
@@ -1298,12 +1353,7 @@ async function callClaude(node, history) {
       'apikey': SUPA_KEY,
       'Authorization': 'Bearer ' + SUPA_KEY,
     },
-    body: JSON.stringify({
-      model: node.model || 'claude-sonnet-4-6',
-      max_tokens: 1800,
-      system,
-      messages: history.map(m => ({ role: m.role, content: m.content })),
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
@@ -1362,15 +1412,25 @@ const pNameEl = document.getElementById('pName');
 const pInfoEl = document.getElementById('pInfo');
 
 let activeNode = null;
-function openPanel(key, node, autoQuery) {
+async function openPanel(key, node, autoQuery) {
   activeNode = { key, ...node };
   pNameEl.textContent = node.name;
   pInfoEl.textContent = node.desc;
   msgsEl.innerHTML = '';
+
+  // Lazy-load persisted history from Supabase on first open (jarvis channel only).
+  if (key === 'jarvis' && !HIST_LOADED[key]) {
+    HIST_LOADED[key] = true;
+    const prior = await loadServerHistory(key, 20);
+    if (prior.length) {
+      HIST[key] = prior.map(m => ({ role: m.role, content: m.content }));
+    }
+  }
   const h = HIST[key] || [];
   if (h.length === 0) {
-    addMsg('sys', key === 'jarvis' ? '▮ JARVIS ONLINE · SONNET 4.6' : `CHANNEL OPEN — ${node.name}`);
+    addMsg('sys', key === 'jarvis' ? '▮ JARVIS ONLINE · SONNET 4.6 · MEMORY OK' : `CHANNEL OPEN — ${node.name}`);
   } else {
+    addMsg('sys', `▮ RESUMING SESSION · ${h.length} MESSAGES IN MEMORY`);
     h.forEach(m => addMsg(m.role === 'user' ? 'user' : 'bot', m.content));
   }
   panel.classList.add('open');
@@ -1402,7 +1462,7 @@ async function send() {
   const ph = addMsg('bot', '...');
   setState('thinking');
   try {
-    const reply = await callClaude(activeNode, hist);
+    const reply = await callClaude(activeNode, hist, activeNode.key);
     ph.textContent = reply;
     hist.push({ role: 'assistant', content: reply });
     if (activeNode.key === 'jarvis') speak(reply);

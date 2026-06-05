@@ -1530,7 +1530,12 @@ document.getElementById('saveKey').addEventListener('click', () => {
 setTimeout(() => {
   document.getElementById('boot').classList.add('gone');
   sfx('thunk');
-  setTimeout(() => { sfx('blip'); speak('At your service, sir.'); }, 700);
+  if (!localStorage.getItem('jarvis_greeted')) {
+    localStorage.setItem('jarvis_greeted', '1');
+    setTimeout(() => { sfx('blip'); speak('К вашим услугам, сэр. Тапните микрофон и говорите.'); }, 700);
+  } else {
+    setTimeout(() => sfx('blip'), 700);
+  }
 }, 3200);
 </script>
 </body>

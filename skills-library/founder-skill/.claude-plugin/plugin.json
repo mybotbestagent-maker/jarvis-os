@@ -1,0 +1,21 @@
+{
+  "name": "founder-skill",
+  "description": "Eleven free Claude skills that test a business before you launch it: a board trained on Hormozi, Thiel and Jobs, a marketing director, a CFO, and a consumer panel of 100 buyer agents. Free, MIT.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jake Schincariol",
+    "url": "https://opusjake.ai"
+  },
+  "homepage": "https://github.com/Jakeschincariol/founder-skill",
+  "repository": "https://github.com/Jakeschincariol/founder-skill",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "claude-skills",
+    "startup",
+    "business-plan",
+    "unit-economics",
+    "market-validation",
+    "subagents"
+  ]
+}

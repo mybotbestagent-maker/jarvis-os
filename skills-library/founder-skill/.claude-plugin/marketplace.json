@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "founder-skill",
+  "description": "The Founder skill pack for Claude",
+  "owner": {
+    "name": "Jake Schincariol",
+    "url": "https://opusjake.ai"
+  },
+  "plugins": [
+    {
+      "name": "founder-skill",
+      "description": "Eleven Claude skills that test a business before you launch it: a board, a competitor scout, a consumer panel of 100 buyer agents, pricing, the offer, a CFO, marketing, brand, operations, a launch plan and the business plan.",
+      "source": "./",
+      "category": "productivity",
+      "homepage": "https://github.com/Jakeschincariol/founder-skill"
+    }
+  ]
+}

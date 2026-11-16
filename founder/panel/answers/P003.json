@@ -1,0 +1,13 @@
+{
+  "id": "P003",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I run everything from my phone, Excel and WhatsApp and I don't trust software with my customers. Nobody outside their own company pays for this yet, so I'd be the guinea pig, and I'm not paying $99 a month for that.",
+  "objection": "Nobody else is using it. If it answers my customers wrong or books a job badly, I lose the customer, not them. And it's one more subscription on top of what I already have.",
+  "would_change_my_mind": "A few other one-truck guys like me, in my trade, who've been using it for months and will tell me it works. Or a cheaper plan, around $40 to $50, with a free trial that only answers missed calls and texts and doesn't touch my schedule.",
+  "price_too_cheap": 15,
+  "price_cheap": 40,
+  "price_expensive": 90,
+  "price_too_expensive": 150
+}

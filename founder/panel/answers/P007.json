@@ -1,0 +1,13 @@
+{
+  "id": "P007",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I run everything from my phone, Excel and WhatsApp and I don't trust software with my customers. $99 a month only makes sense if it brings me jobs, and nobody outside their own company pays for this yet.",
+  "objection": "$99 a month has to bring in actual jobs, not just save me a bit of time, and I'd be one of the first guinea pigs with no proof it works for a guy like me.",
+  "would_change_my_mind": "Another one-or-two-truck owner showing me it booked real jobs they would have missed, or a money-back deal where I only pay after it books jobs.",
+  "price_too_cheap": 15,
+  "price_cheap": 39,
+  "price_expensive": 99,
+  "price_too_expensive": 199
+}

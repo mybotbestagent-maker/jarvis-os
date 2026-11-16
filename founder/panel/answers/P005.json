@@ -1,0 +1,13 @@
+{
+  "id": "P005",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I already pay for Jobber and the schedule and invoices are sorted in the evenings. I'm not paying $99 a month for something that has zero paying customers outside its own owner, and I'm not rebuilding my workflow to be a guinea pig.",
+  "objection": "It's unproven. It runs in one company, the owner's own, and nobody outside has paid for it. $99 only makes sense if it actually brings in booked jobs, and nothing here shows that. Saving me a bit of time doesn't cover it.",
+  "would_change_my_mind": "It works inside Jobber without me switching, and I see real numbers from a few outside companies like mine on how many extra booked jobs it brought. Or I pay only per booked job.",
+  "price_too_cheap": 15,
+  "price_cheap": 39,
+  "price_expensive": 99,
+  "price_too_expensive": 199
+}

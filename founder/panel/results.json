@@ -1,0 +1,127 @@
+{
+ "business": "NeurLead — AI-платформа лидов и диспетчеризации для home-service компаний (подписка $99/$199/$399, триал 14 дней без карты)",
+ "seed": 11,
+ "dealt": 20,
+ "answered": 20,
+ "skipped": [],
+ "buys": 0,
+ "passes": 20,
+ "buy_rate": 0.0,
+ "by_segment": [
+  [
+   "Соло-владелец (1-2 техника)",
+   8,
+   0.0
+  ],
+  [
+   "Малая команда (3-5 техников)",
+   8,
+   0.0
+  ],
+  [
+   "Растущая компания (6-10 техников, есть офис-менеджер)",
+   4,
+   0.0
+  ]
+ ],
+ "by_behaviour": [
+  [
+   "Ранний адоптер",
+   2,
+   0.0
+  ],
+  [
+   "Всё в Excel, телефоне и WhatsApp",
+   4,
+   0.0
+  ],
+  [
+   "Экономит каждый доллар",
+   3,
+   0.0
+  ],
+  [
+   "Живёт в Jobber/Housecall Pro",
+   4,
+   0.0
+  ],
+  [
+   "Зависит от Thumbtack/Angi/Yelp-лидов",
+   4,
+   0.0
+  ],
+  [
+   "Скептик ИИ",
+   3,
+   0.0
+  ]
+ ],
+ "by_income": [
+  [
+   "under $84,000",
+   6,
+   0.0
+  ],
+  [
+   "$134,000 and up",
+   7,
+   0.0
+  ],
+  [
+   "$84,000 to $134,000",
+   7,
+   0.0
+  ]
+ ],
+ "why_not": [
+  [
+   "trust",
+   18,
+   [
+    "Я люблю пробовать новые штуки, и триал без карты меня не пугает, но платить за подписку компании, у которой нет ни одного внешнего платящего клиента, я не буду. Если они исчезнут, я потеряю лиды и переписку с клиентами, а на этом держится мой бизнес.",
+    "I run everything from my phone, Excel and WhatsApp and I don't trust software with my customers. Nobody outside their own company pays for this yet, so I'd be the guinea pig, and I'm not paying $99 a month for that."
+   ],
+   [
+    "P001",
+    "P003"
+   ]
+  ],
+  [
+   "habit",
+   2,
+   [
+    "У меня Excel, телефон и WhatsApp, и это работает. Софту я не доверяю, а настраивать некому: ни времени, ни IT-человека.",
+    "Я уже плачу за Jobber, и расписание с счетами у меня там налажено. Ещё одна подписка на $99+ ради помощника, который пока нигде не проверен на чужих компаниях, мне не нужна."
+   ],
+   [
+    "P002",
+    "P016"
+   ]
+  ]
+ ],
+ "why_yes": [],
+ "flip": [
+  "Несколько живых отзывов от таких же небольших компаний на G2 или Reddit, плюс возможность выгрузить все данные и клиентов в любой момент и ежемесячная оплата без контракта.",
+  "Чтобы кто-то сам настроил всё за меня за один день, а я увидел в деле, как оно отвечает моим клиентам в WhatsApp. Ещё хорошо бы пара живых отзывов от таких же хозяев, как я.",
+  "A few other one-truck guys like me, in my trade, who've been using it for months and will tell me it works. Or a cheaper plan, around $40 to $50, with a free trial that only answers missed calls and texts and doesn't touch my schedule.",
+  "Несколько реальных владельцев таких же маленьких компаний, которые платят и показывают, что он не теряет им заказы; плюс бесплатный тариф или режим, где я сам одобряю каждый ответ перед отправкой.",
+  "It works inside Jobber without me switching, and I see real numbers from a few outside companies like mine on how many extra booked jobs it brought. Or I pay only per booked job.",
+  "Бесплатный тариф навсегда или очень дешёвый старт, плюс отзывы от нескольких таких же маленьких компаний и возможность выгрузить все свои данные в любой момент.",
+  "Another one-or-two-truck owner showing me it booked real jobs they would have missed, or a money-back deal where I only pay after it books jobs.",
+  "Живые примеры переписок с реальными клиентами такой же компании, плюс режим, где ИИ только предлагает ответ, а я одним нажатием отправляю его сама, и отзывы от нескольких таких же соло-мастеров.",
+  "Живой пример компании вроде моей (6-10 техников) с Thumbtack-лидами и цифрой, насколько сократилось время ответа, плюс настройка за один звонок силами их команды без моего участия.",
+  "Several paying home-service companies my size who will talk to me, plus proof it plugs into Jobber/Housecall Pro so I don't have to switch or enter things twice.",
+  "A few real contractors like me, with names I can call, saying it answered their leads without screwing up. Or a setup where it only texts back 'got your request, we'll call you in 10 minutes' and I approve anything else.",
+  "Реальные отзывы от 3-5 компаний моего размера, которые платят и остались, плюс настройка за меня за час и тариф дешевле $50 для 1-2 техников.",
+  "Proof it answers a Thumbtack lead in a couple of minutes and books real jobs, with numbers from a few paying shops like mine. It also has to work with Jobber so I don't have to switch, and ideally I pay only per booked job or get a money-back guarantee.",
+  "Proof from other companies like mine, with real numbers on faster lead response, plus a direct integration with my existing scheduling software and lead sources so I don't switch anything.",
+  "Отзывы и кейсы от нескольких независимых компаний вроде моей, с реальными цифрами по пропущенным звонкам, и возможность видеть и править ответы бота до отправки клиенту.",
+  "Рабочая интеграция с Jobber/Housecall Pro без переноса данных и пара реальных отзывов от таких же небольших компаний с цифрами, сколько обращений он закрыл. Цена в районе $40-50 в месяц.",
+  "Two or three real home-service companies my size, with names I can call, saying it got them back leads that would have gone cold. Or a trial where it answers my Thumbtack leads next to me, so I can watch it before I trust it.",
+  "Real numbers from other home-service companies showing extra booked jobs, or a pay-only-per-booked-job deal where I can see every conversation and take over from the bot at any point.",
+  "Три-четыре реальных компании вроде моей, которые платят уже полгода и с которыми я могу поговорить. Плюс возможность выгрузить все данные в любой момент и режим, где бот только готовит ответ, а отправляю его я.",
+  "Несколько реальных компаний моего размера (3-5 техников), которые платят и рассказывают результат: на G2 или Reddit, либо контакт, с которым я могу поговорить. Тогда я бы взял триал на 14 дней."
+ ],
+ "purchases_first_month_per_buyer": null,
+ "price_answers": 20
+}

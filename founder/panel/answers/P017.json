@@ -1,0 +1,13 @@
+{
+  "id": "P017",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Cold leads on Thumbtack cost me real money, so the problem is real. But nobody outside the owner's own company pays for this yet, and I run everything on Excel, my phone and WhatsApp. I'm not handing my leads and my techs' schedule to an unproven tool.",
+  "objection": "There are no reviews and no case studies from other companies like mine. I'd be the guinea pig, and if it messes up an answer to a lead I've already paid for, I lose the job and the money.",
+  "would_change_my_mind": "Two or three real home-service companies my size, with names I can call, saying it got them back leads that would have gone cold. Or a trial where it answers my Thumbtack leads next to me, so I can watch it before I trust it.",
+  "price_too_cheap": 30,
+  "price_cheap": 99,
+  "price_expensive": 399,
+  "price_too_expensive": 700
+}

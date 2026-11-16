@@ -1,0 +1,13 @@
+{
+  "id": "P014",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I already pay for field-service software plus lead fees, and I'm not adding another subscription to a tool nobody outside the owner's own company has paid for yet. I don't have time to be a guinea pig.",
+  "objection": "No outside customer has paid for it yet, so I'd be the test case. If it drops a lead or messes up my schedule, I lose real jobs, and I already pay for software that does scheduling and invoices.",
+  "would_change_my_mind": "Proof from other companies like mine, with real numbers on faster lead response, plus a direct integration with my existing scheduling software and lead sources so I don't switch anything.",
+  "price_too_cheap": 29,
+  "price_cheap": 79,
+  "price_expensive": 199,
+  "price_too_expensive": 349
+}

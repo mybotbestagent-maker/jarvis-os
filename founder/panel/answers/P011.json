@@ -1,0 +1,13 @@
+{
+  "id": "P011",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I pay for Thumbtack leads and every one I lose hurts, so I'm not letting a bot talk to them when nobody outside the company that built it has used it. Maybe I'd poke at the free trial on a slow week, but I'm not signing up to pay.",
+  "objection": "The AI answers a customer something dumb and I lose a $2,000 job I paid for the lead on. And there are no other customers using it yet, so I'd be the guinea pig.",
+  "would_change_my_mind": "A few real contractors like me, with names I can call, saying it answered their leads without screwing up. Or a setup where it only texts back 'got your request, we'll call you in 10 minutes' and I approve anything else.",
+  "price_too_cheap": 39,
+  "price_cheap": 99,
+  "price_expensive": 249,
+  "price_too_expensive": 450
+}

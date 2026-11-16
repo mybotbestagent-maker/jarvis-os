@@ -1,0 +1,13 @@
+{
+  "id": "P018",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I might poke at the free trial, but I won't pay. Nobody outside the owner's own company is paying for this yet, and I'm not going to let an untested bot talk to my customers when my reputation is on the line. At my size I'd be looking at the $199 or $399 tier, and I need to see it bring in booked jobs before I commit.",
+  "objection": "A bot that says something dumb to a customer costs me a job and a bad review, and that costs far more than the subscription. There's no proof it brings in orders rather than just saving my office manager some time.",
+  "would_change_my_mind": "Real numbers from other home-service companies showing extra booked jobs, or a pay-only-per-booked-job deal where I can see every conversation and take over from the bot at any point.",
+  "price_too_cheap": 29,
+  "price_cheap": 79,
+  "price_expensive": 199,
+  "price_too_expensive": 349
+}

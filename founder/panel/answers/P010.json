@@ -1,0 +1,13 @@
+{
+  "id": "P010",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I already pay for Jobber and don't want another monthly subscription for something nobody outside the owner's own company has paid for. I might poke at the free trial, but I wouldn't pay yet.",
+  "objection": "No outside customers, no reviews, no case studies. I'd be the guinea pig, and if it botches a lead or double-books a tech, that costs me real jobs.",
+  "would_change_my_mind": "Several paying home-service companies my size who will talk to me, plus proof it plugs into Jobber/Housecall Pro so I don't have to switch or enter things twice.",
+  "price_too_cheap": 20,
+  "price_cheap": 49,
+  "price_expensive": 149,
+  "price_too_expensive": 299
+}
